@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { db } from "@/lib/db";
+import { db, currentShopId } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
 import { saveUpload } from "@/lib/uploads";
 import type { FormState } from "./customers";
@@ -29,11 +29,11 @@ export async function createVehicle(_prev: FormState, formData: FormData): Promi
   const parsed = VehicleSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
   if (parsed.data.vin) {
-    const dupe = await db.vehicle.findUnique({ where: { vin: parsed.data.vin } });
+    const dupe = await db.vehicle.findFirst({ where: { vin: parsed.data.vin } });
     if (dupe) return { error: "A vehicle with that VIN already exists" };
   }
-  const v = await db.vehicle.create({ data: parsed.data });
-  await db.auditLog.create({ data: { userId: user.id, action: "create", entity: "Vehicle", entityId: v.id, detail: `${v.year} ${v.make} ${v.model}` } });
+  const v = await db.vehicle.create({ data: { ...parsed.data, shopId: await currentShopId() } });
+  await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "create", entity: "Vehicle", entityId: v.id, detail: `${v.year} ${v.make} ${v.model}` } });
   revalidatePath("/vehicles");
   const returnTo = formData.get("returnTo");
   redirect(typeof returnTo === "string" && returnTo.startsWith("/") ? `${returnTo}${returnTo.includes("?") ? "&" : "?"}vehicleId=${v.id}` : `/vehicles/${v.id}`);
@@ -44,7 +44,7 @@ export async function updateVehicle(id: string, _prev: FormState, formData: Form
   const parsed = VehicleSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
   if (parsed.data.vin) {
-    const dupe = await db.vehicle.findUnique({ where: { vin: parsed.data.vin } });
+    const dupe = await db.vehicle.findFirst({ where: { vin: parsed.data.vin } });
     if (dupe && dupe.id !== id) return { error: "A vehicle with that VIN already exists" };
   }
   await db.vehicle.update({ where: { id }, data: parsed.data });

@@ -1,5 +1,5 @@
 import "server-only";
-import { db } from "./db";
+import { db, currentShopId } from "./db";
 import type { NotificationChannel } from "@/generated/prisma/enums";
 
 /**
@@ -23,7 +23,7 @@ export async function queueNotification(opts: {
     if (channel === "SMS" && !customer?.phone) continue;
     const delivered = channel === "PORTAL" ? true : await deliver(channel, customer, opts);
     await db.notification.create({
-      data: {
+      data: { shopId: await currentShopId(),
         customerId: opts.customerId,
         workOrderId: opts.workOrderId ?? null,
         channel,

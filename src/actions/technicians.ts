@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { db } from "@/lib/db";
+import { db, rawDb, currentShopId } from "@/lib/db";
 import { hashPassword, requireStaff, BILLING_ROLES } from "@/lib/auth";
 import type { FormState } from "./customers";
 
@@ -29,10 +29,10 @@ export async function createTechnician(_prev: FormState, formData: FormData): Pr
   if (d.loginPassword) {
     if (!d.email) return { error: "An email is required to create a login" };
     if (d.loginPassword.length < 8) return { error: "Password must be at least 8 characters" };
-    if (await db.user.findUnique({ where: { email: d.email } })) return { error: "That email already has a login" };
-    userId = (await db.user.create({ data: { email: d.email, name: d.name, role: "TECHNICIAN", passwordHash: await hashPassword(d.loginPassword) } })).id;
+    if (await rawDb.user.findUnique({ where: { email: d.email } })) return { error: "That email already has a login" };
+    userId = (await db.user.create({ data: { shopId: await currentShopId(), email: d.email, name: d.name, role: "TECHNICIAN", passwordHash: await hashPassword(d.loginPassword) } })).id;
   }
-  const t = await db.technician.create({ data: { name: d.name, email: opt(d.email), phone: opt(d.phone), specialty: opt(d.specialty), hourlyRate: d.hourlyRate, color: d.color, userId } });
+  const t = await db.technician.create({ data: { shopId: await currentShopId(), name: d.name, email: opt(d.email), phone: opt(d.phone), specialty: opt(d.specialty), hourlyRate: d.hourlyRate, color: d.color, userId } });
   revalidatePath("/technicians");
   redirect(`/technicians/${t.id}`);
 }
@@ -49,8 +49,8 @@ export async function updateTechnician(id: string, _prev: FormState, formData: F
     const passwordHash = await hashPassword(d.loginPassword);
     if (t.user) await db.user.update({ where: { id: t.user.id }, data: { passwordHash, email: d.email, name: d.name } });
     else {
-      if (await db.user.findUnique({ where: { email: d.email } })) return { error: "That email already has a login" };
-      const u = await db.user.create({ data: { email: d.email, name: d.name, role: "TECHNICIAN", passwordHash } });
+      if (await rawDb.user.findUnique({ where: { email: d.email } })) return { error: "That email already has a login" };
+      const u = await db.user.create({ data: { shopId: await currentShopId(), email: d.email, name: d.name, role: "TECHNICIAN", passwordHash } });
       await db.technician.update({ where: { id }, data: { userId: u.id } });
     }
   } else if (t.user && d.email && t.user.email !== d.email) {

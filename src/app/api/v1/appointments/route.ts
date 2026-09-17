@@ -1,5 +1,5 @@
 import { addMinutes, endOfDay, startOfDay } from "date-fns";
-import { db } from "@/lib/db";
+import { db, currentShopId } from "@/lib/db";
 import { ApiError, date, handler, json, num, pageResponse, paging, readBody, str } from "@/lib/api";
 import { queueNotification } from "@/lib/notify";
 import { emitWebhook } from "@/lib/webhooks";
@@ -24,7 +24,7 @@ export const POST = handler("write", async (req) => {
   const start = date(b.scheduledStart, "scheduledStart", { required: true })!;
   const duration = num(b.durationMinutes, "durationMinutes", { int: true, min: 15 }) ?? 60;
   const a = await db.appointment.create({
-    data: {
+    data: { shopId: await currentShopId(),
       customerId: vehicle.customerId,
       vehicleId,
       scheduledStart: start,

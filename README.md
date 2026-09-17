@@ -16,10 +16,18 @@ Requires the local PostgreSQL 13 service (database `nexdrive`, role `nexdrive` �
 
 | Login | Role | Password |
 | --- | --- | --- |
-| owner@plexroswell.com | Shop Owner (everything incl. Settings) | nexdrive123 |
-| advisor@plexroswell.com | Service Advisor | nexdrive123 |
-| mike@plexroswell.com | Technician | nexdrive123 |
-| john.smith@example.com | Customer portal (`/portal`) | nexdrive123 |
+| admin@nexdrive.app | NexDrive platform admin (`/admin`) — all shops, plans, trials, leads | nexdrive123 |
+| owner@plexroswell.com | Plex Roswell Automotive — Shop Owner (everything incl. Settings) | nexdrive123 |
+| advisor@plexroswell.com | Plex Roswell — Service Advisor | nexdrive123 |
+| mike@plexroswell.com | Plex Roswell — Technician | nexdrive123 |
+| john.smith@example.com | Plex Roswell — Customer portal (`/portal`) | nexdrive123 |
+| demo@nexdrive.app | Demo Tire & Lube — a second, separate shop | nexdrive123 |
+
+New shops self-serve at `/signup` (14-day trial, every module enabled).
+
+## Multi-shop (SaaS)
+
+One installation serves any number of shops. Every shop-owned table carries a `shopId`, and `src/lib/db.ts` wraps Prisma so that **every query is filtered to the current shop automatically** (from the session, or `withShop()` for background work) — a shop-scoped query with no shop context throws rather than leaking. Work-order and invoice numbers are per-shop sequences. Staff logins belong to one shop; `SUPERADMIN` users (NexDrive Productions) manage all shops from `/admin`, can open any shop, change plans/status/trials, reset owner passwords and review website leads. Suspended shops cannot sign in and their API keys stop working.
 
 Reset to the demo dataset at any time:
 

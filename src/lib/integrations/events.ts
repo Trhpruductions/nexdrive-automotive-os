@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { db } from "@/lib/db";
+import { db, rawDb, currentShopId } from "@/lib/db";
 import { bus } from "./bus";
 import { emitWebhook } from "@/lib/webhooks";
 import type { MachineStatus } from "@/generated/prisma/enums";
@@ -71,7 +71,7 @@ export async function applyEvents(rawEvents: unknown[], ctx: { integrationId?: s
     await db.integration.update({ where: { id: ctx.integrationId }, data: { lastSeenAt: new Date(), eventCount: { increment: result.applied }, lastError: result.errors[0] ?? null } }).catch(() => null);
   }
   await db.ingestLog.create({
-    data: {
+    data: { shopId: await currentShopId(),
       integrationId: ctx.integrationId ?? null,
       source: ctx.source,
       ok: result.errors.length === 0,
@@ -88,13 +88,13 @@ async function ensureMachine(ev: { machine: string; name?: string; line?: string
   const code = ev.machine.trim().toUpperCase();
   let lineId: string | undefined;
   if (ev.line) {
-    const line = await db.productionLine.upsert({ where: { name: ev.line.trim() }, update: {}, create: { name: ev.line.trim() } });
+    const line = await db.productionLine.upsert({ where: { shopId_name: { shopId: await currentShopId(), name: ev.line.trim() } }, update: {}, create: { shopId: await currentShopId(), name: ev.line.trim() } });
     lineId = line.id;
   }
   const machine = await db.machine.upsert({
-    where: { code },
+    where: { shopId_code: { shopId: await currentShopId(), code } },
     update: { lastHeartbeatAt: new Date(), ...(lineId ? { lineId } : {}), ...(ev.name ? { name: ev.name } : {}) },
-    create: { code, name: ev.name ?? code, lineId, integrationId, lastHeartbeatAt: new Date(), status: "IDLE", lastStatusChangeAt: new Date() },
+    create: { shopId: await currentShopId(), code, name: ev.name ?? code, lineId, integrationId, lastHeartbeatAt: new Date(), status: "IDLE", lastStatusChangeAt: new Date() },
   });
   return machine;
 }
@@ -142,10 +142,10 @@ async function applyOne(ev: CanonicalEvent, ctx: { integrationId?: string; sourc
     }
     case "inventory.set": {
       const sku = ev.sku.trim().toUpperCase();
-      const part = await db.part.findUnique({ where: { sku } });
+      const part = await db.part.findFirst({ where: { sku } });
       if (!part) {
         if (!ev.name) throw new Error(`Unknown SKU ${sku} (include "name" to auto-create)`);
-        await db.part.create({ data: { sku, name: ev.name, quantityOnHand: ev.quantity, location: ev.location, movements: { create: { delta: ev.quantity, reason: ev.reason ?? "Feed: initial", reference: ctx.source } } } });
+        await db.part.create({ data: { shopId: await currentShopId(), sku, name: ev.name, quantityOnHand: ev.quantity, location: ev.location, movements: { create: { delta: ev.quantity, reason: ev.reason ?? "Feed: initial", reference: ctx.source } } } });
       } else {
         const delta = ev.quantity - part.quantityOnHand;
         await db.part.update({ where: { id: part.id }, data: { quantityOnHand: ev.quantity, ...(ev.location ? { location: ev.location } : {}) } });
@@ -156,7 +156,7 @@ async function applyOne(ev: CanonicalEvent, ctx: { integrationId?: string; sourc
     }
     case "inventory.adjust": {
       const sku = ev.sku.trim().toUpperCase();
-      const part = await db.part.findUnique({ where: { sku } });
+      const part = await db.part.findFirst({ where: { sku } });
       if (!part) throw new Error(`Unknown SKU ${sku}`);
       if (part.quantityOnHand + ev.delta < 0) throw new Error(`SKU ${sku}: adjustment would go below zero`);
       await db.$transaction([
@@ -168,12 +168,12 @@ async function applyOne(ev: CanonicalEvent, ctx: { integrationId?: string; sourc
     }
     case "inventory.price": {
       const sku = ev.sku.trim().toUpperCase();
-      const part = await db.part.findUnique({ where: { sku } });
+      const part = await db.part.findFirst({ where: { sku } });
       let supplierId: string | undefined;
-      if (ev.supplier) supplierId = (await db.supplier.upsert({ where: { name: ev.supplier }, update: {}, create: { name: ev.supplier } })).id;
+      if (ev.supplier) supplierId = (await db.supplier.upsert({ where: { shopId_name: { shopId: await currentShopId(), name: ev.supplier } }, update: {}, create: { shopId: await currentShopId(), name: ev.supplier } })).id;
       if (!part) {
         if (!ev.name) throw new Error(`Unknown SKU ${sku} (include "name" to auto-create)`);
-        await db.part.create({ data: { sku, name: ev.name, cost: ev.cost ?? 0, price: ev.price ?? 0, supplierId } });
+        await db.part.create({ data: { shopId: await currentShopId(), sku, name: ev.name, cost: ev.cost ?? 0, price: ev.price ?? 0, supplierId } });
       } else {
         await db.part.update({ where: { id: part.id }, data: { ...(ev.cost != null ? { cost: ev.cost } : {}), ...(ev.price != null ? { price: ev.price } : {}), ...(supplierId ? { supplierId } : {}) } });
       }
@@ -186,10 +186,11 @@ async function applyOne(ev: CanonicalEvent, ctx: { integrationId?: string; sourc
 /** Machines that haven't reported within `staleMinutes` are flipped to OFFLINE. */
 export async function sweepOfflineMachines(staleMinutes = 5) {
   const cutoff = new Date(Date.now() - staleMinutes * 60_000);
-  const stale = await db.machine.findMany({ where: { active: true, status: { not: "OFFLINE" }, OR: [{ lastHeartbeatAt: { lt: cutoff } }, { lastHeartbeatAt: null }] } });
+  // runs from a timer with no request — unscoped on purpose, across every shop
+  const stale = await rawDb.machine.findMany({ where: { active: true, status: { not: "OFFLINE" }, OR: [{ lastHeartbeatAt: { lt: cutoff } }, { lastHeartbeatAt: null }] } });
   for (const m of stale) {
-    await db.machine.update({ where: { id: m.id }, data: { status: "OFFLINE", lastStatusChangeAt: new Date() } });
-    await db.machineEvent.create({ data: { machineId: m.id, type: "STATUS", status: "OFFLINE", message: `No data for ${staleMinutes} min` } });
+    await rawDb.machine.update({ where: { id: m.id }, data: { status: "OFFLINE", lastStatusChangeAt: new Date() } });
+    await rawDb.machineEvent.create({ data: { machineId: m.id, type: "STATUS", status: "OFFLINE", message: `No data for ${staleMinutes} min` } });
   }
   if (stale.length) bus.emit("change", { machines: stale.map((m) => m.code), parts: [] });
   return stale.length;

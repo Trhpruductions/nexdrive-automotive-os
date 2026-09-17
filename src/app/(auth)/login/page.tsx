@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
@@ -31,7 +32,7 @@ export default async function LoginPage({
           </h1>
           <p className="mt-4 text-muted leading-relaxed">
             Work orders, estimates, invoices, digital inspections, scheduling, parts, a customer portal and an
-            AI assistant — tailored to how <span className="text-text">{s.name}</span> runs its shop.
+            AI assistant — tailored to how {s.shopId ? <span className="text-text">{s.name}</span> : "your shop"} runs.
           </p>
           <ul className="mt-8 grid grid-cols-2 gap-3 text-sm text-muted">
             {["Work Orders", "Estimates", "Invoices", "Inspections", "Customer Portal", "NexDrive AI"].map((f) => (
@@ -59,11 +60,12 @@ export default async function LoginPage({
               <Image src="/brand/mark.png" alt="" width={40} height={40} />
             )}
             <div>
-              <h2 className="text-lg font-semibold leading-tight">{s.name}</h2>
-              <p className="text-xs text-muted">{portal ? "Customer portal" : s.tagline}</p>
+              <h2 className="text-lg font-semibold leading-tight">{s.shopId ? s.name : "NexDrive Automotive OS"}</h2>
+              <p className="text-xs text-muted">{portal ? "Customer portal" : s.shopId ? s.tagline : "Sign in to your shop, portal or admin account"}</p>
             </div>
           </div>
           <LoginForm next={next} portal={Boolean(portal)} />
+          {!portal ? <p className="text-sm text-muted mt-5 text-center">New to NexDrive? <Link href="/signup" className="text-accent hover:underline">Start a free 14-day trial</Link></p> : null}
         </div>
       </section>
     </main>

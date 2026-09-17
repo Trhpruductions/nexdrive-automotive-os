@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { db } from "@/lib/db";
+import { db, rawDb, currentShopId } from "@/lib/db";
 import { hashPassword, requireStaff, MANAGER_ROLES } from "@/lib/auth";
 import { saveUpload } from "@/lib/uploads";
 import { ALL_MODULE_KEYS } from "@/lib/constants";
@@ -37,7 +37,7 @@ export async function saveBranding(formData: FormData) {
     data.logoUrl = url;
   }
   if (formData.get("removeLogo") === "true") data.logoUrl = null;
-  await db.shopSettings.update({ where: { id: 1 }, data });
+  await db.shopSettings.update({ where: { shopId: await currentShopId() }, data });
   revalidateAll();
   back("branding", "Branding saved");
 }
@@ -46,7 +46,7 @@ export async function saveBranding(formData: FormData) {
 export async function saveBusiness(formData: FormData) {
   await requireStaff(MANAGER_ROLES);
   await db.shopSettings.update({
-    where: { id: 1 },
+    where: { shopId: await currentShopId() },
     data: {
       phone: opt(formData.get("phone")),
       email: opt(formData.get("email")),
@@ -70,7 +70,7 @@ export async function saveRates(formData: FormData) {
   const laborRate = Number(formData.get("laborRate"));
   const shopFeeRate = Number(formData.get("shopFeeRate")) / 100;
   if (!(taxRate >= 0 && taxRate < 1) || !(laborRate >= 0) || !(shopFeeRate >= 0 && shopFeeRate < 1)) back("rates", "Check the rate values", true);
-  await db.shopSettings.update({ where: { id: 1 }, data: { taxRate, laborRate, shopFeeRate, openTime: String(formData.get("openTime") ?? "08:00"), closeTime: String(formData.get("closeTime") ?? "18:00") } });
+  await db.shopSettings.update({ where: { shopId: await currentShopId() }, data: { taxRate, laborRate, shopFeeRate, openTime: String(formData.get("openTime") ?? "08:00"), closeTime: String(formData.get("closeTime") ?? "18:00") } });
   revalidateAll();
   back("rates", "Rates & hours saved");
 }
@@ -80,7 +80,7 @@ export async function addBay(formData: FormData) {
   await requireStaff(MANAGER_ROLES);
   const name = String(formData.get("name") ?? "").trim();
   if (!name) back("bays", "Bay name is required", true);
-  await db.bay.upsert({ where: { name }, update: { active: true }, create: { name } });
+  await db.bay.upsert({ where: { shopId_name: { shopId: await currentShopId(), name } }, update: { active: true }, create: { shopId: await currentShopId(), name } });
   revalidateAll();
   back("bays", `${name} added`);
 }
@@ -104,7 +104,7 @@ export async function deleteBay(id: string) {
 export async function saveModules(formData: FormData) {
   await requireStaff(MANAGER_ROLES);
   const modules = formData.getAll("modules").map(String).filter((m) => (ALL_MODULE_KEYS as string[]).includes(m));
-  await db.shopSettings.update({ where: { id: 1 }, data: { modules } });
+  await db.shopSettings.update({ where: { shopId: await currentShopId() }, data: { modules } });
   revalidateAll();
   back("modules", "Modules updated");
 }
@@ -116,7 +116,7 @@ export async function addTemplateItem(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   if (!category || !name) back("inspection", "Category and item are required", true);
   const count = await db.inspectionTemplateItem.count();
-  await db.inspectionTemplateItem.create({ data: { category, name, sortOrder: count } });
+  await db.inspectionTemplateItem.create({ data: { shopId: await currentShopId(), category, name, sortOrder: count } });
   back("inspection", "Item added");
 }
 
@@ -151,7 +151,7 @@ export async function saveCannedService(formData: FormData) {
   if (!name || !(laborHours >= 0)) back("services", "Name and labor hours are required", true);
   const laborRateRaw = String(formData.get("laborRate") ?? "").trim();
   const data = { name, description: opt(formData.get("description")), laborHours, laborRate: laborRateRaw ? Number(laborRateRaw) : null };
-  const svc = id ? await db.cannedService.update({ where: { id }, data }) : await db.cannedService.create({ data });
+  const svc = id ? await db.cannedService.update({ where: { id }, data }) : await db.cannedService.create({ data: { ...data, shopId: await currentShopId() } });
   // parts: rows of partId + qty
   const partIds = formData.getAll("partId").map(String);
   const qtys = formData.getAll("partQty").map(Number);
@@ -183,12 +183,12 @@ export async function createUser(formData: FormData) {
   const d = parsed.data;
   const password = d.password ?? "";
   if (password.length < 8) return back("users", "Password must be at least 8 characters", true);
-  if (await db.user.findUnique({ where: { email: d.email } })) return back("users", "That email already exists", true);
-  const u = await db.user.create({ data: { name: d.name, email: d.email, role: d.role as Role, passwordHash: await hashPassword(password) } });
+  if (await rawDb.user.findUnique({ where: { email: d.email } })) return back("users", "That email already exists", true);
+  const u = await db.user.create({ data: { shopId: await currentShopId(), name: d.name, email: d.email, role: d.role as Role, passwordHash: await hashPassword(password) } });
   if (d.role === "TECHNICIAN") {
     const existing = await db.technician.findFirst({ where: { OR: [{ email: d.email }, { name: d.name }], userId: null } });
     if (existing) await db.technician.update({ where: { id: existing.id }, data: { userId: u.id } });
-    else await db.technician.create({ data: { name: d.name, email: d.email, userId: u.id } });
+    else await db.technician.create({ data: { shopId: await currentShopId(), name: d.name, email: d.email, userId: u.id } });
   }
   back("users", `${d.name} added`);
 }

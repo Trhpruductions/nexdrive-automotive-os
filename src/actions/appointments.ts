@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { addMinutes, format } from "date-fns";
-import { db } from "@/lib/db";
+import { db, currentShopId } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
 import { queueNotification } from "@/lib/notify";
 import { emitWebhook } from "@/lib/webhooks";
@@ -55,7 +55,7 @@ export async function createAppointment(_prev: FormState, formData: FormData): P
   if (problems.length && !formData.has("force")) return { error: `${problems.join(". ")}. Tick "book anyway" to double-book.` };
 
   const appt = await db.appointment.create({
-    data: { customerId: d.customerId, vehicleId: d.vehicleId, scheduledStart: start, scheduledEnd: end, serviceRequested: d.serviceRequested, technicianId, bayId, notes: opt(d.notes), dropOff: d.dropOff, status: d.status ?? "SCHEDULED" },
+    data: { shopId: await currentShopId(), customerId: d.customerId, vehicleId: d.vehicleId, scheduledStart: start, scheduledEnd: end, serviceRequested: d.serviceRequested, technicianId, bayId, notes: opt(d.notes), dropOff: d.dropOff, status: d.status ?? "SCHEDULED" },
     include: { vehicle: true },
   });
   await queueNotification({
@@ -63,7 +63,7 @@ export async function createAppointment(_prev: FormState, formData: FormData): P
     subject: "Appointment booked",
     body: `Your ${appt.vehicle.year} ${appt.vehicle.make} ${appt.vehicle.model} is booked for ${format(start, "EEEE, MMM d 'at' h:mm a")} — ${d.serviceRequested}.`,
   });
-  await db.auditLog.create({ data: { userId: user.id, action: "create", entity: "Appointment", entityId: appt.id } });
+  await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "create", entity: "Appointment", entityId: appt.id } });
   emitWebhook("appointment.created", appt);
   revalidatePath("/schedule");
   redirect(`/schedule?date=${format(start, "yyyy-MM-dd")}&ok=Appointment+booked`);

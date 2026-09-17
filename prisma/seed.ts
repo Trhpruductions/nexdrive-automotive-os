@@ -6,10 +6,14 @@ import bcrypt from "bcryptjs";
 import { createHash } from "node:crypto";
 import { addDays, addHours, addMinutes, isWeekend, setHours, setMinutes, startOfDay, subDays, subMinutes } from "date-fns";
 import { computeTotals } from "../src/lib/money";
+import { DEFAULT_CANNED_SERVICES, DEFAULT_INSPECTION_TEMPLATE } from "../src/lib/defaults";
 
 const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
 
 const DEMO_PASSWORD = "nexdrive123";
+const SHOP = "shop_plex_roswell";
+let woSeq = 0;
+let invSeq = 0;
 const TAX_RATE = 0.07;
 const LABOR_RATE = 125;
 
@@ -43,6 +47,10 @@ async function main() {
     db.inspectionTemplateItem.deleteMany(),
     db.aiMessage.deleteMany(),
     db.auditLog.deleteMany(),
+    db.webhookDelivery.deleteMany(),
+    db.webhookEndpoint.deleteMany(),
+    db.apiKey.deleteMany(),
+    db.lead.deleteMany(),
     db.machineEvent.deleteMany(),
     db.machine.deleteMany(),
     db.productionLine.deleteMany(),
@@ -53,12 +61,17 @@ async function main() {
     db.customer.deleteMany(),
     db.bay.deleteMany(),
     db.shopSettings.deleteMany(),
+    db.shop.deleteMany(),
   ]);
+
+  // ── Platform: NexDrive super-admin + the tenant shop ──
+  await db.user.create({ data: { email: "admin@nexdrive.app", passwordHash: hash, name: "NexDrive Admin", role: "SUPERADMIN" } });
+  await db.shop.create({ data: { id: SHOP, slug: "plex-roswell", name: "Plex Roswell Automotive", plan: "PRO", status: "ACTIVE", ownerEmail: "owner@plexroswell.com" } });
 
   // ── Shop (the tenant tailoring the OS) ──
   await db.shopSettings.create({
     data: {
-      id: 1,
+      shopId: SHOP,
       name: "Plex Roswell Automotive",
       tagline: "Full-service automotive repair & performance",
       phone: "(575) 555-0142",
@@ -80,7 +93,7 @@ async function main() {
     },
   });
 
-  const bays = await Promise.all(["Bay 1", "Bay 2", "Bay 3", "Bay 4"].map((name) => db.bay.create({ data: { name } })));
+  const bays = await Promise.all(["Bay 1", "Bay 2", "Bay 3", "Bay 4"].map((name) => db.bay.create({ data: { shopId: SHOP, name } })));
 
   // ── Staff ──
   const techSpecs = [
@@ -91,17 +104,17 @@ async function main() {
   ];
   const techs = [];
   for (const t of techSpecs) {
-    const user = await db.user.create({ data: { email: t.email, passwordHash: hash, name: t.name, role: "TECHNICIAN" } });
-    techs.push(await db.technician.create({ data: { ...t, hourlyRate: 38, userId: user.id } }));
+    const user = await db.user.create({ data: { shopId: SHOP, email: t.email, passwordHash: hash, name: t.name, role: "TECHNICIAN" } });
+    techs.push(await db.technician.create({ data: { shopId: SHOP, ...t, hourlyRate: 38, userId: user.id } }));
   }
   const [mike, james, david, chris] = techs;
 
-  await db.user.create({ data: { email: "owner@plexroswell.com", passwordHash: hash, name: "Shop Owner", role: "OWNER" } });
-  await db.user.create({ data: { email: "advisor@plexroswell.com", passwordHash: hash, name: "Alex Rivera", role: "SERVICE_ADVISOR" } });
+  await db.user.create({ data: { shopId: SHOP, email: "owner@plexroswell.com", passwordHash: hash, name: "Shop Owner", role: "OWNER" } });
+  await db.user.create({ data: { shopId: SHOP, email: "advisor@plexroswell.com", passwordHash: hash, name: "Alex Rivera", role: "SERVICE_ADVISOR" } });
 
   // ── Suppliers & parts ──
-  const napa = await db.supplier.create({ data: { name: "NAPA Auto Parts", phone: "(575) 555-0199", email: "orders@napa.example" } });
-  const worldpac = await db.supplier.create({ data: { name: "WorldPac", phone: "(800) 555-0123", email: "sales@worldpac.example" } });
+  const napa = await db.supplier.create({ data: { shopId: SHOP, name: "NAPA Auto Parts", phone: "(575) 555-0199", email: "orders@napa.example" } });
+  const worldpac = await db.supplier.create({ data: { shopId: SHOP, name: "WorldPac", phone: "(800) 555-0123", email: "sales@worldpac.example" } });
   const partSpecs = [
     { sku: "BRK-PAD-F150", name: "Brake Pad Set (Front)", category: "Brakes", brand: "Akebono", cost: 42, price: 89.99, quantityOnHand: 4, reorderPoint: 6, location: "A-12", supplierId: napa.id },
     { sku: "BRK-ROT-300", name: "Brake Rotor 300mm", category: "Brakes", brand: "Brembo", cost: 61, price: 129.0, quantityOnHand: 8, reorderPoint: 4, location: "A-13", supplierId: worldpac.id },
@@ -118,7 +131,7 @@ async function main() {
   ];
   const parts: Record<string, { id: string; price: number; name: string }> = {};
   for (const p of partSpecs) {
-    const row = await db.part.create({ data: p });
+    const row = await db.part.create({ data: { ...p, shopId: SHOP } });
     parts[p.sku] = { id: row.id, price: p.price, name: p.name };
   }
 
@@ -132,12 +145,12 @@ async function main() {
   ];
   let order = 0;
   for (const [category, items] of template) {
-    for (const name of items) await db.inspectionTemplateItem.create({ data: { category, name, sortOrder: order++ } });
+    for (const name of items) await db.inspectionTemplateItem.create({ data: { shopId: SHOP, category, name, sortOrder: order++ } });
   }
 
   // ── Canned services ──
   const oilChange = await db.cannedService.create({
-    data: { name: "Full Synthetic Oil Change", description: "Up to 6 qt synthetic oil, filter, 21-point check", laborHours: 0.5 },
+    data: { shopId: SHOP, name: "Full Synthetic Oil Change", description: "Up to 6 qt synthetic oil, filter, 21-point check", laborHours: 0.5 },
   });
   await db.cannedServicePart.createMany({
     data: [
@@ -146,7 +159,7 @@ async function main() {
     ],
   });
   const brakeJob = await db.cannedService.create({
-    data: { name: "Front Brake Job", description: "Front pads and rotors, hardware, bed-in procedure", laborHours: 2.0 },
+    data: { shopId: SHOP, name: "Front Brake Job", description: "Front pads and rotors, hardware, bed-in procedure", laborHours: 2.0 },
   });
   await db.cannedServicePart.createMany({
     data: [
@@ -154,9 +167,9 @@ async function main() {
       { cannedServiceId: brakeJob.id, partId: parts["BRK-ROT-300"].id, quantity: 2 },
     ],
   });
-  await db.cannedService.create({ data: { name: "Tire Rotation & Balance", description: "Rotate and balance four tires", laborHours: 0.75 } });
-  await db.cannedService.create({ data: { name: "Diagnostic (Check Engine)", description: "Scan, pinpoint testing, written findings", laborHours: 1.0 } });
-  const tuneUp = await db.cannedService.create({ data: { name: "Tune-Up (Plugs & Filters)", description: "Spark plugs, engine & cabin air filters", laborHours: 1.5 } });
+  await db.cannedService.create({ data: { shopId: SHOP, name: "Tire Rotation & Balance", description: "Rotate and balance four tires", laborHours: 0.75 } });
+  await db.cannedService.create({ data: { shopId: SHOP, name: "Diagnostic (Check Engine)", description: "Scan, pinpoint testing, written findings", laborHours: 1.0 } });
+  const tuneUp = await db.cannedService.create({ data: { shopId: SHOP, name: "Tune-Up (Plugs & Filters)", description: "Spark plugs, engine & cabin air filters", laborHours: 1.5 } });
   await db.cannedServicePart.createMany({
     data: [
       { cannedServiceId: tuneUp.id, partId: parts["SPK-PLG-IR"].id, quantity: 6 },
@@ -204,15 +217,15 @@ async function main() {
   const customers: { id: string; name: string; vehicles: { id: string; label: string; mileage: number }[] }[] = [];
   for (const c of customerSpecs) {
     const customer = await db.customer.create({
-      data: { firstName: c.first, lastName: c.last, email: c.email, phone: c.phone, city: "Roswell", state: "NM", zip: "88201", address: "123 Pecan Dr" },
+      data: { shopId: SHOP, firstName: c.first, lastName: c.last, email: c.email, phone: c.phone, city: "Roswell", state: "NM", zip: "88201", address: "123 Pecan Dr" },
     });
     if (c.portal) {
-      await db.user.create({ data: { email: c.email, passwordHash: hash, name: `${c.first} ${c.last}`, role: "CUSTOMER", customerId: customer.id } });
+      await db.user.create({ data: { shopId: SHOP, email: c.email, passwordHash: hash, name: `${c.first} ${c.last}`, role: "CUSTOMER", customerId: customer.id } });
     }
     const vehicles = [];
     for (const v of c.vehicles) {
       const row = await db.vehicle.create({
-        data: { customerId: customer.id, year: v.year, make: v.make, model: v.model, trim: v.trim, color: v.color, licensePlate: v.plate, plateState: "NM", vin: v.vin, mileage: v.mileage },
+        data: { shopId: SHOP, customerId: customer.id, year: v.year, make: v.make, model: v.model, trim: v.trim, color: v.color, licensePlate: v.plate, plateState: "NM", vin: v.vin, mileage: v.mileage },
       });
       vehicles.push({ id: row.id, label: `${v.year} ${v.make} ${v.model}`, mileage: v.mileage });
     }
@@ -234,7 +247,8 @@ async function main() {
     const createdAt = subDays(at(today, 9), opts.createdDaysAgo);
     const done = ["COMPLETED", "INVOICED"].includes(opts.status);
     const row = await db.workOrder.create({
-      data: {
+      data: { shopId: SHOP,
+        number: ++woSeq,
         customerId: opts.customer.id,
         vehicleId: v.id,
         technicianId: opts.tech?.id,
@@ -274,7 +288,7 @@ async function main() {
       const items = await db.inspectionTemplateItem.findMany({ orderBy: { sortOrder: "asc" } });
       const results = ["GOOD", "GOOD", "GOOD", "ATTENTION", "GOOD", "GOOD", "URGENT", "GOOD", "GOOD", "GOOD", "ATTENTION", "GOOD"] as const;
       await db.inspection.create({
-        data: {
+        data: { shopId: SHOP,
           workOrderId: row.id,
           vehicleId: v.id,
           technicianId: opts.tech?.id,
@@ -289,7 +303,8 @@ async function main() {
       const issuedAt = addHours(createdAt, 7);
       const paidAt = opts.paidDaysAgo != null ? subDays(at(today, 15), opts.paidDaysAgo) : addHours(issuedAt, 1);
       await db.invoice.create({
-        data: {
+        data: { shopId: SHOP,
+          number: ++invSeq,
           workOrderId: row.id,
           customerId: opts.customer.id,
           issuedAt,
@@ -405,7 +420,7 @@ async function main() {
 
   // ── Appointments (today + next days) ──
   const appt = async (c: typeof john, vi: number, day: Date, h: number, dur: number, service: string, tech?: { id: string }, bay?: { id: string }, status: "SCHEDULED" | "CONFIRMED" | "CHECKED_IN" | "IN_PROGRESS" | "COMPLETED" = "SCHEDULED") =>
-    db.appointment.create({ data: { customerId: c.id, vehicleId: c.vehicles[vi].id, scheduledStart: at(day, h), scheduledEnd: addMinutes(at(day, h), dur), serviceRequested: service, technicianId: tech?.id, bayId: bay?.id, status } });
+    db.appointment.create({ data: { shopId: SHOP, customerId: c.id, vehicleId: c.vehicles[vi].id, scheduledStart: at(day, h), scheduledEnd: addMinutes(at(day, h), dur), serviceRequested: service, technicianId: tech?.id, bayId: bay?.id, status } });
 
   await appt(john, 0, today, 8, 150, "Brake replacement", james, bays[0], "IN_PROGRESS");
   await appt(michael, 0, today, 12, 90, "Oil change", chris, bays[0], "COMPLETED");
@@ -438,29 +453,29 @@ async function main() {
     ],
   });
   await db.notification.createMany({
-    data: [
+    data: ([
       { customerId: john.id, workOrderId: woMustang.id, channel: "EMAIL", subject: "Your estimate is ready", body: "Hi John, your estimate for the 2022 Ford Mustang GT is ready to review and approve online.", status: "SENT", sentAt: addMinutes(at(today, 9), 47) },
       { customerId: john.id, workOrderId: woMustang.id, channel: "SMS", subject: "Estimate ready", body: "Plex Roswell Automotive: your Mustang estimate is ready — tap to approve.", status: "SENT", sentAt: addMinutes(at(today, 9), 47) },
       { customerId: john.id, workOrderId: woMustang.id, channel: "PORTAL", subject: "Estimate ready for approval", body: "Your estimate for the 2022 Ford Mustang GT is ready. Review and approve it from your portal.", status: "SENT", sentAt: addMinutes(at(today, 9), 47) },
       { customerId: michael.id, channel: "SMS", subject: "Vehicle ready", body: "Your 2021 Toyota Camry is ready for pickup. Total: see invoice.", status: "SENT", sentAt: at(today, 13, 20) },
       { customerId: robert.id, channel: "EMAIL", subject: "Parts update", body: "Your battery arrives tomorrow morning; we'll have you back on the road by noon.", status: "QUEUED" },
-    ],
+    ] as const).map((n) => ({ ...n, shopId: SHOP })),
   });
   await db.message.createMany({
-    data: [
+    data: ([
       { customerId: john.id, workOrderId: woMustang.id, direction: "OUTBOUND", authorName: "Alex Rivera", body: "Hi John — James found the front rotors are below spec. Estimate is in your portal whenever you're ready.", createdAt: addMinutes(at(today, 9), 50), readAt: at(today, 10) },
       { customerId: john.id, workOrderId: woMustang.id, direction: "INBOUND", authorName: "John Smith", body: "Thanks. Is the brake fluid flush urgent or can it wait until next visit?", createdAt: at(today, 10, 5) },
       { customerId: robert.id, direction: "INBOUND", authorName: "Robert Taylor", body: "Any update on the battery? Need the car by Friday.", createdAt: at(today, 11, 30) },
-    ],
+    ] as const).map((m) => ({ ...m, shopId: SHOP })),
   });
 
   // ── Production floor: lines, machines, a webhook integration and a day of events ──
   const DEMO_KEY = "nd_demo_plexroswell_feed_key";
   const feed = await db.integration.create({
-    data: { name: "Shop floor gateway (demo)", type: "WEBHOOK", keyHash: createHash("sha256").update(DEMO_KEY).digest("hex"), keyPrefix: DEMO_KEY.slice(0, 10), config: {}, lastSeenAt: new Date(), eventCount: 0 },
+    data: { shopId: SHOP, name: "Shop floor gateway (demo)", type: "WEBHOOK", keyHash: createHash("sha256").update(DEMO_KEY).digest("hex"), keyPrefix: DEMO_KEY.slice(0, 10), config: {}, lastSeenAt: new Date(), eventCount: 0 },
   });
-  const lineSvc = await db.productionLine.create({ data: { name: "Service Floor", description: "Lifts, alignment rack, tire & dyno equipment", targetPerHour: 6, sortOrder: 0 } });
-  const lineParts = await db.productionLine.create({ data: { name: "Parts Fabrication", description: "In-house rotor machining & bracket press", targetPerHour: 20, sortOrder: 1 } });
+  const lineSvc = await db.productionLine.create({ data: { shopId: SHOP, name: "Service Floor", description: "Lifts, alignment rack, tire & dyno equipment", targetPerHour: 6, sortOrder: 0 } });
+  const lineParts = await db.productionLine.create({ data: { shopId: SHOP, name: "Parts Fabrication", description: "In-house rotor machining & bracket press", targetPerHour: 20, sortOrder: 1 } });
   const DEG = "\u00b0C";
   const machineSpecs: [string, string, string, string, "RUNNING" | "IDLE" | "DOWN" | "MAINTENANCE" | "OFFLINE", Record<string, [number, string]>][] = [
     ["LIFT-01", "Lift 1 (2-post)", "Vehicle lift", lineSvc.id, "RUNNING", { load_kg: [1820, "kg"], height_cm: [168, "cm"] }],
@@ -476,7 +491,7 @@ async function main() {
   const minutesIntoDay = nowTs.getHours() * 60 + nowTs.getMinutes();
   for (const [code, name, type, lineId, status, metrics] of machineSpecs) {
     const m = await db.machine.create({
-      data: {
+      data: { shopId: SHOP,
         code, name, type, lineId, status, integrationId: feed.id,
         lastHeartbeatAt: status === "OFFLINE" ? subMinutes(nowTs, 47) : subMinutes(nowTs, Math.floor(rnd() * 3)),
         lastStatusChangeAt: subMinutes(nowTs, 5 + Math.floor(rnd() * 180)),
@@ -504,7 +519,21 @@ async function main() {
   }
   const evCount = await db.machineEvent.count();
   await db.integration.update({ where: { id: feed.id }, data: { eventCount: evCount } });
-  await db.ingestLog.create({ data: { integrationId: feed.id, source: "webhook:Shop floor gateway (demo)", ok: true, summary: `${evCount} events applied (seed)` } });
+  await db.ingestLog.create({ data: { shopId: SHOP, integrationId: feed.id, source: "webhook:Shop floor gateway (demo)", ok: true, summary: `${evCount} events applied (seed)` } });
+
+  await db.shop.update({ where: { id: SHOP }, data: { woSeq, invSeq } });
+
+  // ── A second, nearly empty shop so isolation is visible (owner: demo@nexdrive.app) ──
+  const demo = await db.shop.create({ data: { slug: "demo-tire-lube", name: "Demo Tire & Lube", plan: "TRIAL", status: "TRIAL", trialEndsAt: addDays(today, 14), ownerEmail: "demo@nexdrive.app" } });
+  await db.shopSettings.create({ data: { shopId: demo.id, name: "Demo Tire & Lube", tagline: "Fast lube & tires", phone: "(575) 555-0200", email: "hello@demotire.example", city: "Roswell", state: "NM", accentColor: "#f97316", taxRate: 0.0825, laborRate: 95 } });
+  await db.user.create({ data: { shopId: demo.id, email: "demo@nexdrive.app", passwordHash: hash, name: "Dana Demo", role: "OWNER" } });
+  await db.bay.createMany({ data: [{ shopId: demo.id, name: "Bay 1" }, { shopId: demo.id, name: "Bay 2" }] });
+  await db.inspectionTemplateItem.createMany({ data: DEFAULT_INSPECTION_TEMPLATE.flatMap(([category, items], ci) => items.map((name, i) => ({ shopId: demo.id, category, name, sortOrder: ci * 100 + i }))) });
+  await db.cannedService.createMany({ data: DEFAULT_CANNED_SERVICES.map((c) => ({ ...c, shopId: demo.id })) });
+  const demoCustomer = await db.customer.create({ data: { shopId: demo.id, firstName: "Pat", lastName: "Nguyen", email: "pat@example.com", phone: "(575) 555-0301", city: "Roswell", state: "NM" } });
+  const demoVehicle = await db.vehicle.create({ data: { shopId: demo.id, customerId: demoCustomer.id, year: 2018, make: "Subaru", model: "Outback", color: "Green", licensePlate: "DEMO-01", mileage: 78400 } });
+  await db.workOrder.create({ data: { shopId: demo.id, number: 1, customerId: demoCustomer.id, vehicleId: demoVehicle.id, complaint: "Oil change and tire rotation", mileageIn: 78400, status: "APPROVED", approvedAt: today, approvedBy: "Pat Nguyen (in person)", lines: { create: [{ kind: "LABOR", description: "Full synthetic oil change", quantity: 0.5, hours: 0.5, unitPrice: 95, taxable: false, sortOrder: 0 }, { kind: "FEE", description: "Oil & filter", quantity: 1, unitPrice: 54.99, taxable: true, sortOrder: 1 }] } } });
+  await db.shop.update({ where: { id: demo.id }, data: { woSeq: 1 } });
 
   const counts = {
     users: await db.user.count(), customers: await db.customer.count(), vehicles: await db.vehicle.count(),
@@ -512,7 +541,7 @@ async function main() {
   };
   console.log("Seeded:", counts);
   console.log(`\nDemo webhook key (Settings > Integrations): ${DEMO_KEY}`);
-  console.log(`\nLogins (password: ${DEMO_PASSWORD})\n  owner@plexroswell.com     Shop Owner\n  advisor@plexroswell.com   Service Advisor\n  mike@plexroswell.com      Technician\n  john.smith@example.com    Customer portal`);
+  console.log(`\nLogins (password: ${DEMO_PASSWORD})\n  admin@nexdrive.app        NexDrive platform admin (/admin)\n  owner@plexroswell.com     Plex Roswell - Shop Owner\n  advisor@plexroswell.com   Plex Roswell - Service Advisor\n  mike@plexroswell.com      Plex Roswell - Technician\n  john.smith@example.com    Plex Roswell - Customer portal\n  demo@nexdrive.app         Demo Tire & Lube - Shop Owner (second shop)`);
 }
 
 main()

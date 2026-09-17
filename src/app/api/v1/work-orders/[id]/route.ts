@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, currentShopId } from "@/lib/db";
 import { ApiError, date, handler, json, readBody, str } from "@/lib/api";
 import { getSettings } from "@/lib/settings";
 import { computeTotals } from "@/lib/money";
@@ -64,7 +64,7 @@ export const PATCH = handler("write", async (req, { params, key }) => {
   await db.workOrder.update({ where: { id: params.id }, data });
   const w = await load(params.id);
   if (statusChanged) {
-    await db.auditLog.create({ data: { action: `status:${statusChanged}`, entity: "WorkOrder", entityId: w.id, detail: `#${w.number} via API key ${key.name}` } });
+    await db.auditLog.create({ data: { shopId: await currentShopId(), action: `status:${statusChanged}`, entity: "WorkOrder", entityId: w.id, detail: `#${w.number} via API key ${key.name}` } });
     emitWebhook("work_order.status_changed", { id: w.id, number: w.number, from: current.status, to: statusChanged, vehicle: w.vehicle, customer: w.customer });
   }
   return json({ ...w, totals: computeTotals(w.lines, settings.taxRate, { taxExempt: w.customer.taxExempt }) });

@@ -3,7 +3,7 @@ import { ApiError, handler, json, num, readBody, str } from "@/lib/api";
 import { emitWebhook } from "@/lib/webhooks";
 
 async function find(idOrSku: string) {
-  const part = (await db.part.findUnique({ where: { id: idOrSku } })) ?? (await db.part.findUnique({ where: { sku: idOrSku.toUpperCase() } }));
+  const part = (await db.part.findUnique({ where: { id: idOrSku } })) ?? (await db.part.findFirst({ where: { sku: idOrSku.toUpperCase() } }));
   if (!part) throw new ApiError(404, "Part not found", "not_found");
   return part;
 }
@@ -25,7 +25,7 @@ export const PATCH = handler("write", async (req, { params, key }) => {
   if ("active" in b) data.active = Boolean(b.active);
   if ("sku" in b) {
     const sku = str(b.sku, "sku", { required: true, max: 60 })!.toUpperCase();
-    const dupe = await db.part.findUnique({ where: { sku } });
+    const dupe = await db.part.findFirst({ where: { sku } });
     if (dupe && dupe.id !== part.id) throw new ApiError(409, "That SKU already exists.", "conflict");
     data.sku = sku;
   }

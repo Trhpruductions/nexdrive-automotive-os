@@ -1,6 +1,6 @@
 import "server-only";
 import { createHmac } from "node:crypto";
-import { db } from "./db";
+import { db, currentShopIdOrNull, withShop } from "./db";
 import { serialize } from "./api";
 
 /**
@@ -34,7 +34,11 @@ export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 
 /** Fire-and-forget: never blocks or throws into the calling action. */
 export function emitWebhook(event: WebhookEvent, data: unknown) {
-  void deliverAll(event, data).catch((e) => console.error("[webhooks]", e));
+  void (async () => {
+    const shopId = await currentShopIdOrNull();
+    if (!shopId) return;
+    await withShop(shopId, () => deliverAll(event, data));
+  })().catch((e) => console.error("[webhooks]", e));
 }
 
 async function deliverAll(event: WebhookEvent, data: unknown) {

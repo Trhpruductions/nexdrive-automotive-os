@@ -10,9 +10,80 @@ datasource db {
   provider = "postgresql"
 }
 
+// ============================ Platform (multi-shop) ============================
+
+enum ShopPlan {
+  TRIAL
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum ShopStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CANCELLED
+}
+
+// A tenant. Every shop-owned row below carries shopId and is scoped automatically (see src/lib/db.ts).
+model Shop {
+  id          String     @id @default(cuid())
+  slug        String     @unique
+  name        String
+  plan        ShopPlan   @default(TRIAL)
+  status      ShopStatus @default(TRIAL)
+  trialEndsAt DateTime?
+  ownerEmail  String?
+  notes       String?
+  woSeq       Int        @default(0)
+  invSeq      Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  settings       ShopSettings?
+  users          User[]
+  technicians    Technician[]
+  bays           Bay[]
+  customers      Customer[]
+  vehicles       Vehicle[]
+  appointments   Appointment[]
+  workOrders     WorkOrder[]
+  inspections    Inspection[]
+  suppliers      Supplier[]
+  parts          Part[]
+  invoices       Invoice[]
+  notifications  Notification[]
+  messages       Message[]
+  cannedServices CannedService[]
+  templateItems  InspectionTemplateItem[]
+  auditLogs      AuditLog[]
+  integrations   Integration[]
+  lines          ProductionLine[]
+  machines       Machine[]
+  ingestLogs     IngestLog[]
+  apiKeys        ApiKey[]
+  webhooks       WebhookEndpoint[]
+}
+
+// Demo / contact requests from the public website
+model Lead {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  shopName  String?
+  phone     String?
+  message   String?
+  source    String   @default("website")
+  handled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
 // ============================ Auth & staff ============================
 
 enum Role {
+  SUPERADMIN
   OWNER
   ADMIN
   SERVICE_ADVISOR
@@ -35,6 +106,11 @@ model User {
   technician Technician?
   auditLogs  AuditLog[]
   aiMessages AiMessage[]
+
+  shop   Shop?   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String?
+
+  @@index([shopId])
 }
 
 model Technician {
@@ -54,14 +130,25 @@ model Technician {
   appointments Appointment[]
   inspections  Inspection[]
   timeEntries  TimeEntry[]
+
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@index([shopId])
 }
 
 model Bay {
   id           String        @id @default(cuid())
-  name         String        @unique
+  name         String
   active       Boolean       @default(true)
   workOrders   WorkOrder[]
   appointments Appointment[]
+
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@unique([shopId, name])
+  @@index([shopId])
 }
 
 // ============================ Customers & vehicles ============================
@@ -90,12 +177,16 @@ model Customer {
   notifications Notification[]
   messages      Message[]
 
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
   @@index([lastName, firstName])
+  @@index([shopId])
 }
 
 model Vehicle {
   id           String   @id @default(cuid())
-  vin          String?  @unique
+  vin          String?
   year         Int
   make         String
   model        String
@@ -118,8 +209,13 @@ model Vehicle {
   inspections  Inspection[]
   reminders    MaintenanceReminder[]
 
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@unique([shopId, vin])
   @@index([customerId])
   @@index([licensePlate])
+  @@index([shopId])
 }
 
 enum PhotoKind {
@@ -189,7 +285,11 @@ model Appointment {
   workOrder    WorkOrder?  @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
   workOrderId  String?     @unique
 
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
   @@index([scheduledStart])
+  @@index([shopId])
 }
 
 // ============================ Work orders ============================
@@ -207,7 +307,7 @@ enum WorkOrderStatus {
 
 model WorkOrder {
   id                String          @id @default(cuid())
-  number            Int             @unique @default(autoincrement())
+  number            Int
   status            WorkOrderStatus @default(ESTIMATE)
   complaint         String
   diagnosis         String?
@@ -243,9 +343,14 @@ model WorkOrder {
   notifications Notification[]
   messages      Message[]
 
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@unique([shopId, number])
   @@index([status])
   @@index([customerId])
   @@index([vehicleId])
+  @@index([shopId])
 }
 
 enum LineKind {
@@ -309,6 +414,11 @@ model Inspection {
   technician   Technician?      @relation(fields: [technicianId], references: [id], onDelete: SetNull)
   technicianId String?
   items        InspectionItem[]
+
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@index([shopId])
 }
 
 model InspectionItem {
@@ -327,16 +437,22 @@ model InspectionItem {
 
 model Supplier {
   id      String  @id @default(cuid())
-  name    String  @unique
+  name    String
   phone   String?
   email   String?
   website String?
   parts   Part[]
+
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@unique([shopId, name])
+  @@index([shopId])
 }
 
 model Part {
   id             String   @id @default(cuid())
-  sku            String   @unique
+  sku            String
   name           String
   description    String?
   category       String?
@@ -356,7 +472,12 @@ model Part {
   movements  StockMovement[]
   cannedUses CannedServicePart[]
 
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@unique([shopId, sku])
   @@index([category])
+  @@index([shopId])
 }
 
 model StockMovement {
@@ -382,7 +503,7 @@ enum InvoiceStatus {
 
 model Invoice {
   id         String        @id @default(cuid())
-  number     Int           @unique @default(autoincrement())
+  number     Int
   status     InvoiceStatus @default(DRAFT)
   issuedAt   DateTime      @default(now())
   dueAt      DateTime?
@@ -402,8 +523,13 @@ model Invoice {
   customerId  String
   payments    Payment[]
 
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@unique([shopId, number])
   @@index([status])
   @@index([issuedAt])
+  @@index([shopId])
 }
 
 enum PaymentMethod {
@@ -454,12 +580,18 @@ model Notification {
   workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
   workOrderId String?
 
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
   @@index([customerId, createdAt])
+  @@index([shopId])
 }
 
 model ShopSettings {
-  id            Int     @id @default(1)
-  name          String  @default("Plex Roswell Automotive")
+  id            String  @id @default(cuid())
+  shop          Shop    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId        String  @unique
+  name          String  @default("My Shop")
   tagline       String  @default("Automotive Service Center")
   phone         String?
   email         String?
@@ -492,6 +624,11 @@ model InspectionTemplateItem {
   name      String
   sortOrder Int     @default(0)
   active    Boolean @default(true)
+
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@index([shopId])
 }
 
 // Canned jobs: "Brake job", "Oil change" — one click adds labor + parts to a work order
@@ -505,6 +642,11 @@ model CannedService {
   createdAt   DateTime @default(now())
 
   parts CannedServicePart[]
+
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@index([shopId])
 }
 
 model CannedServicePart {
@@ -536,7 +678,11 @@ model Message {
   workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
   workOrderId String?
 
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
   @@index([customerId, createdAt])
+  @@index([shopId])
 }
 
 model AuditLog {
@@ -550,7 +696,11 @@ model AuditLog {
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
   userId String?
 
+  shop   Shop?   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String?
+
   @@index([createdAt])
+  @@index([shopId])
 }
 
 // ============================ NexDrive AI ============================
@@ -597,16 +747,27 @@ model Integration {
 
   machines Machine[]
   logs     IngestLog[]
+
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@index([shopId])
 }
 
 model ProductionLine {
   id            String    @id @default(cuid())
-  name          String    @unique
+  name          String
   description   String?
   targetPerHour Int?
   active        Boolean   @default(true)
   sortOrder     Int       @default(0)
   machines      Machine[]
+
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@unique([shopId, name])
+  @@index([shopId])
 }
 
 enum MachineStatus {
@@ -619,7 +780,7 @@ enum MachineStatus {
 
 model Machine {
   id                 String        @id @default(cuid())
-  code               String        @unique
+  code               String
   name               String
   type               String?
   status             MachineStatus @default(OFFLINE)
@@ -636,7 +797,12 @@ model Machine {
   lineId        String?
   events        MachineEvent[]
 
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@unique([shopId, code])
   @@index([lineId])
+  @@index([shopId])
 }
 
 enum MachineEventType {
@@ -681,7 +847,11 @@ model IngestLog {
   integration   Integration? @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   integrationId String?
 
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
   @@index([createdAt])
+  @@index([shopId])
 }
 
 // ============================ Developer API & webhooks ============================
@@ -699,6 +869,11 @@ model ApiKey {
   expiresAt  DateTime?
   createdBy  String?
   createdAt  DateTime  @default(now())
+
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@index([shopId])
 }
 
 // Outbound notifications: NexDrive POSTs signed JSON to other systems when events happen.
@@ -715,6 +890,11 @@ model WebhookEndpoint {
   createdAt       DateTime  @default(now())
 
   deliveries WebhookDelivery[]
+
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@index([shopId])
 }
 
 model WebhookDelivery {

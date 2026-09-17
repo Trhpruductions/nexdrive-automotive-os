@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { getSession } from "@/lib/auth";
+import { withShop } from "@/lib/db";
 import { bus } from "@/lib/integrations/bus";
 import { productionSnapshot } from "@/lib/integrations/snapshot";
 
@@ -11,7 +12,8 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(req: NextRequest) {
   const user = await getSession();
-  if (!user || user.role === "CUSTOMER") return new Response("Unauthorized", { status: 401 });
+  if (!user || user.role === "CUSTOMER" || !user.activeShopId) return new Response("Unauthorized", { status: 401 });
+  const shopId = user.activeShopId;
 
   const encoder = new TextEncoder();
   let closed = false;
@@ -24,7 +26,7 @@ export async function GET(req: NextRequest) {
       const send = async () => {
         if (closed) return;
         try {
-          const snap = await productionSnapshot();
+          const snap = await withShop(shopId, () => productionSnapshot());
           controller.enqueue(encoder.encode(`event: snapshot\ndata: ${JSON.stringify(snap)}\n\n`));
         } catch (e) {
           controller.enqueue(encoder.encode(`event: error\ndata: ${JSON.stringify({ message: e instanceof Error ? e.message : String(e) })}\n\n`));

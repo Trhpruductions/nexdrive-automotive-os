@@ -10,6 +10,6 @@ export function buildNav(enabled: ModuleKey[], role: string): NavItem[] {
     if (m.roles && !m.roles.includes(role as never)) continue;
     items.push({ key: m.key, label: m.label, href: m.href, group: m.group });
   }
-  if (role === "OWNER" || role === "ADMIN") items.push({ key: "settings", label: "Settings", href: "/settings", group: "admin" });
+  if (role === "OWNER" || role === "ADMIN" || role === "SUPERADMIN") items.push({ key: "settings", label: "Settings", href: "/settings", group: "admin" });
   return items;
 }

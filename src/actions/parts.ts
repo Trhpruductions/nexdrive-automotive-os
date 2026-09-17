@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { db } from "@/lib/db";
+import { db, currentShopId } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
 import type { FormState } from "./customers";
 
@@ -28,8 +28,8 @@ export async function createPart(_prev: FormState, formData: FormData): Promise<
   const parsed = PartSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
   const d = parsed.data;
-  if (await db.part.findUnique({ where: { sku: d.sku } })) return { error: "That SKU already exists" };
-  const part = await db.part.create({ data: { ...d, description: opt(d.description), category: opt(d.category), brand: opt(d.brand), location: opt(d.location), supplierId: opt(d.supplierId) } });
+  if (await db.part.findFirst({ where: { sku: d.sku } })) return { error: "That SKU already exists" };
+  const part = await db.part.create({ data: { shopId: await currentShopId(), ...d, description: opt(d.description), category: opt(d.category), brand: opt(d.brand), location: opt(d.location), supplierId: opt(d.supplierId) } });
   if (d.quantityOnHand) await db.stockMovement.create({ data: { partId: part.id, delta: d.quantityOnHand, reason: "Initial stock" } });
   revalidatePath("/parts");
   redirect(`/parts/${part.id}`);
@@ -40,7 +40,7 @@ export async function updatePart(id: string, _prev: FormState, formData: FormDat
   const parsed = PartSchema.omit({ quantityOnHand: true }).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
   const d = parsed.data;
-  const dupe = await db.part.findUnique({ where: { sku: d.sku } });
+  const dupe = await db.part.findFirst({ where: { sku: d.sku } });
   if (dupe && dupe.id !== id) return { error: "That SKU already exists" };
   await db.part.update({ where: { id }, data: { ...d, description: opt(d.description), category: opt(d.category), brand: opt(d.brand), location: opt(d.location), supplierId: opt(d.supplierId), active: formData.get("active") !== "false" } });
   revalidatePath(`/parts/${id}`);
@@ -70,7 +70,7 @@ export async function scanAdjust(formData: FormData) {
   const sku = String(formData.get("sku") ?? "").trim().toUpperCase();
   const delta = Math.trunc(Number(formData.get("delta"))) || 1;
   const mode = String(formData.get("mode") ?? "receive");
-  const part = await db.part.findUnique({ where: { sku } });
+  const part = await db.part.findFirst({ where: { sku } });
   if (!part) redirect(`/parts/scan?error=${encodeURIComponent(`No part with SKU ${sku}`)}&mode=${mode}`);
   const signed = mode === "pull" ? -Math.abs(delta) : Math.abs(delta);
   if (part.quantityOnHand + signed < 0) redirect(`/parts/scan?error=Stock+cannot+go+below+zero&mode=${mode}`);
@@ -98,7 +98,7 @@ export async function createSupplier(formData: FormData) {
   await requireStaff();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) redirect("/parts/suppliers?error=Name+is+required");
-  await db.supplier.upsert({ where: { name }, update: { phone: opt(formData.get("phone")), email: opt(formData.get("email")), website: opt(formData.get("website")) }, create: { name, phone: opt(formData.get("phone")), email: opt(formData.get("email")), website: opt(formData.get("website")) } });
+  await db.supplier.upsert({ where: { shopId_name: { shopId: await currentShopId(), name } }, update: { phone: opt(formData.get("phone")), email: opt(formData.get("email")), website: opt(formData.get("website")) }, create: { shopId: await currentShopId(), name, phone: opt(formData.get("phone")), email: opt(formData.get("email")), website: opt(formData.get("website")) } });
   revalidatePath("/parts/suppliers");
   redirect("/parts/suppliers?ok=Supplier+saved");
 }

@@ -1,10 +1,11 @@
 import "server-only";
 import { cache } from "react";
-import { db } from "./db";
+import { db, currentShopIdOrNull } from "./db";
 import { ALL_MODULE_KEYS, type ModuleKey } from "./constants";
 
 export type ShopSettings = {
-  id: number;
+  id: string;
+  shopId: string;
   name: string;
   tagline: string;
   phone: string | null;
@@ -30,10 +31,21 @@ export type ShopSettings = {
 };
 
 /** Shop settings row (created with defaults on first read). Memoised per request. */
-export const getSettings = cache(async (): Promise<ShopSettings> => {
-  const row =
-    (await db.shopSettings.findUnique({ where: { id: 1 } })) ??
-    (await db.shopSettings.create({ data: { id: 1 } }));
+export const PLATFORM_DEFAULTS: ShopSettings = {
+  id: "", shopId: "", name: "NexDrive Automotive OS", tagline: "Complete automotive business management software", phone: null, email: null, address: null, city: null, state: null, zip: null, website: null,
+  taxRate: 0, laborRate: 0, shopFeeRate: 0, openTime: "08:00", closeTime: "18:00", invoiceFooter: null, logoUrl: null, accentColor: "#2f7cf6", currency: "USD", timezone: "America/New_York",
+  modules: [...ALL_MODULE_KEYS], approvalMessage: null, portalWelcome: null,
+};
+
+/** Shop settings, memoised per request *per shop* (the root layout may run with no shop context). */
+export async function getSettings(): Promise<ShopSettings> {
+  const shopId = await currentShopIdOrNull();
+  if (!shopId) return PLATFORM_DEFAULTS;
+  return loadSettings(shopId);
+}
+
+const loadSettings = cache(async (shopId: string): Promise<ShopSettings> => {
+  const row = (await db.shopSettings.findFirst({ where: { shopId } })) ?? (await db.shopSettings.create({ data: { shopId } }));
   return {
     ...row,
     taxRate: Number(row.taxRate),

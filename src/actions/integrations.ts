@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { randomBytes } from "node:crypto";
-import { db } from "@/lib/db";
+import { db, currentShopId } from "@/lib/db";
 import { requireStaff, MANAGER_ROLES } from "@/lib/auth";
 import { hashKey, resyncIntegrations, runIntegrationOnce } from "@/lib/integrations/runtime";
 import { applyEvents } from "@/lib/integrations/events";
@@ -65,7 +65,7 @@ export async function createIntegration(formData: FormData) {
     keyHash = hashKey(key);
     keyPrefix = key.slice(0, 10);
   }
-  const row = await db.integration.create({ data: { name, type, config: config as object, keyHash, keyPrefix } });
+  const row = await db.integration.create({ data: { shopId: await currentShopId(), name, type, config: config as object, keyHash, keyPrefix } });
   await resyncIntegrations().catch(() => null);
   revalidatePath("/settings");
   revalidatePath("/production");
@@ -134,7 +134,7 @@ export async function saveLine(formData: FormData) {
   if (!name) redirect("/production?error=Line+name+is+required");
   const data = { name, description: opt(formData.get("description")) ?? null, targetPerHour: Number(formData.get("targetPerHour")) || null };
   if (id) await db.productionLine.update({ where: { id }, data });
-  else await db.productionLine.create({ data });
+  else await db.productionLine.create({ data: { ...data, shopId: await currentShopId() } });
   revalidatePath("/production");
   redirect("/production?ok=Line+saved");
 }
@@ -155,8 +155,8 @@ export async function saveMachine(formData: FormData) {
   const data = { code, name, type: opt(formData.get("type")) ?? null, lineId: opt(formData.get("lineId")) ?? null, notes: opt(formData.get("notes")) ?? null, active: formData.get("active") !== "false" };
   if (id) await db.machine.update({ where: { id }, data });
   else {
-    if (await db.machine.findUnique({ where: { code } })) redirect("/production?error=That+machine+code+already+exists");
-    await db.machine.create({ data });
+    if (await db.machine.findFirst({ where: { code } })) redirect("/production?error=That+machine+code+already+exists");
+    await db.machine.create({ data: { ...data, shopId: await currentShopId() } });
   }
   revalidatePath("/production");
   redirect(`/production?ok=${encodeURIComponent(`${name} saved`)}`);

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
-import { db } from "@/lib/db";
+import { db, rawDb, withShop, currentShopId, nextNumber } from "@/lib/db";
 import { requireStaff, BILLING_ROLES } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { computeTotals } from "@/lib/money";
@@ -38,7 +38,8 @@ export async function createWorkOrder(_prev: FormState, formData: FormData): Pro
   if (!vehicle || vehicle.customerId !== d.customerId) return { error: "That vehicle doesn't belong to the selected customer" };
 
   const wo = await db.workOrder.create({
-    data: {
+    data: { shopId: await currentShopId(),
+      number: await nextNumber("wo"),
       customerId: d.customerId,
       vehicleId: d.vehicleId,
       complaint: d.complaint,
@@ -53,7 +54,7 @@ export async function createWorkOrder(_prev: FormState, formData: FormData): Pro
   });
   if (d.mileageIn && d.mileageIn > vehicle.mileage) await db.vehicle.update({ where: { id: vehicle.id }, data: { mileage: d.mileageIn } });
   if (d.appointmentId) await db.appointment.update({ where: { id: d.appointmentId }, data: { workOrderId: wo.id, status: "CHECKED_IN" } }).catch(() => null);
-  await db.auditLog.create({ data: { userId: user.id, action: "create", entity: "WorkOrder", entityId: wo.id, detail: `#${wo.number}` } });
+  await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "create", entity: "WorkOrder", entityId: wo.id, detail: `#${wo.number}` } });
   emitWebhook("work_order.created", { ...wo, vehicle, createdBy: user.name });
   revalidatePath("/work-orders");
   redirect(`/work-orders/${wo.id}`);
@@ -267,7 +268,7 @@ export async function setWorkOrderStatus(id: string, status: WorkOrderStatus) {
   if (status === "ON_HOLD") {
     await queueNotification({ customerId: wo.customerId, workOrderId: id, subject: "Waiting on parts", body: `We're waiting on parts for your ${wo.vehicle.year} ${wo.vehicle.make} ${wo.vehicle.model}. We'll update you as soon as they arrive.` });
   }
-  await db.auditLog.create({ data: { userId: user.id, action: `status:${status}`, entity: "WorkOrder", entityId: id, detail: `#${wo.number}` } });
+  await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: `status:${status}`, entity: "WorkOrder", entityId: id, detail: `#${wo.number}` } });
   emitWebhook("work_order.status_changed", { id, number: wo.number, from: wo.status, to: status, vehicle: wo.vehicle, customer: { id: wo.customer.id, firstName: wo.customer.firstName, lastName: wo.customer.lastName }, by: user.name });
   revalidatePath(`/work-orders/${id}`);
   revalidatePath("/work-orders");
@@ -292,7 +293,7 @@ export async function sendForApproval(id: string) {
     body: `Hi ${wo.customer.firstName}, your estimate for the ${wo.vehicle.year} ${wo.vehicle.make} ${wo.vehicle.model} (${totals.total.toLocaleString("en-US", { style: "currency", currency: "USD" })}) is ready. Review and approve it here: ${link}`,
     channels: ["EMAIL", "SMS", "PORTAL"],
   });
-  await db.auditLog.create({ data: { userId: user.id, action: "send_for_approval", entity: "WorkOrder", entityId: id, detail: `#${wo.number}` } });
+  await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "send_for_approval", entity: "WorkOrder", entityId: id, detail: `#${wo.number}` } });
   emitWebhook("work_order.sent_for_approval", { id, number: wo.number, total: totals.total, approvalUrl: link, vehicle: wo.vehicle, customer: { id: wo.customer.id, firstName: wo.customer.firstName, lastName: wo.customer.lastName, email: wo.customer.email } });
   revalidatePath(`/work-orders/${id}`);
   redirect(`/work-orders/${id}?ok=Estimate+sent+to+customer`);
@@ -300,13 +301,19 @@ export async function sendForApproval(id: string) {
 
 /** Public: customer approves / declines via token link (no login). */
 export async function respondToEstimate(token: string, formData: FormData) {
-  const wo = await db.workOrder.findUnique({ where: { approvalToken: token }, include: { lines: true } });
+  const found = await rawDb.workOrder.findUnique({ where: { approvalToken: token }, select: { shopId: true } });
+  if (!found) redirect(`/approve/${token}?error=This+estimate+is+no+longer+open`);
+  return withShop(found.shopId, () => respondToEstimateScoped(token, formData));
+}
+
+async function respondToEstimateScoped(token: string, formData: FormData) {
+  const wo = await db.workOrder.findFirst({ where: { approvalToken: token }, include: { lines: true } });
   if (!wo || wo.status !== "AWAITING_APPROVAL") redirect(`/approve/${token}?error=This+estimate+is+no+longer+open`);
   const decision = String(formData.get("decision") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   if (decision === "decline") {
     await db.workOrder.update({ where: { id: wo.id }, data: { status: "ESTIMATE", declinedAt: new Date(), approvedBy: name || null } });
-    await db.auditLog.create({ data: { action: "estimate_declined", entity: "WorkOrder", entityId: wo.id, detail: name } });
+    await db.auditLog.create({ data: { shopId: await currentShopId(), action: "estimate_declined", entity: "WorkOrder", entityId: wo.id, detail: name } });
     emitWebhook("work_order.declined", { id: wo.id, number: wo.number, by: name || null });
     redirect(`/approve/${token}?done=declined`);
   }
@@ -318,7 +325,7 @@ export async function respondToEstimate(token: string, formData: FormData) {
     if (line.approved !== approved) await db.workOrderLine.update({ where: { id: line.id }, data: { approved } });
   }
   await db.workOrder.update({ where: { id: wo.id }, data: { status: "APPROVED", approvedAt: new Date(), approvedBy: name, declinedAt: null } });
-  await db.auditLog.create({ data: { action: "estimate_approved", entity: "WorkOrder", entityId: wo.id, detail: name } });
+  await db.auditLog.create({ data: { shopId: await currentShopId(), action: "estimate_approved", entity: "WorkOrder", entityId: wo.id, detail: name } });
   emitWebhook("work_order.approved", { id: wo.id, number: wo.number, by: name, approvedLineIds: approvedIds.size ? [...approvedIds] : wo.lines.map((l) => l.id) });
   redirect(`/approve/${token}?done=approved`);
 }
@@ -340,7 +347,7 @@ export async function portalApprove(workOrderId: string, formData: FormData) {
     if (line.approved !== approved) await db.workOrderLine.update({ where: { id: line.id }, data: { approved } });
   }
   await db.workOrder.update({ where: { id: wo.id }, data: { status: "APPROVED", approvedAt: new Date(), approvedBy: `${user.name} (portal)`, declinedAt: null } });
-  await db.auditLog.create({ data: { userId: user.id, action: "estimate_approved", entity: "WorkOrder", entityId: wo.id, detail: "portal" } });
+  await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "estimate_approved", entity: "WorkOrder", entityId: wo.id, detail: "portal" } });
   emitWebhook("work_order.approved", { id: wo.id, number: wo.number, by: `${user.name} (portal)` });
   revalidatePath("/portal");
   redirect(`/portal/service/${wo.id}?ok=Estimate+approved`);
@@ -357,7 +364,8 @@ export async function createInvoice(workOrderId: string) {
   const t = computeTotals(wo.lines, settings.taxRate, { taxExempt: wo.customer.taxExempt });
   const invoice = await db.$transaction(async (tx) => {
     const inv = await tx.invoice.create({
-      data: {
+      data: { shopId: await currentShopId(),
+        number: await nextNumber("inv"),
         workOrderId,
         customerId: wo.customerId,
         status: "SENT",
@@ -382,7 +390,7 @@ export async function createInvoice(workOrderId: string) {
     return inv;
   });
   await queueNotification({ customerId: wo.customerId, workOrderId, subject: `Invoice ${String(invoice.number).padStart(5, "0")}`, body: `Your invoice for ${t.total.toLocaleString("en-US", { style: "currency", currency: "USD" })} is ready to view in your portal.` });
-  await db.auditLog.create({ data: { userId: user.id, action: "invoice", entity: "Invoice", entityId: invoice.id, detail: `WO-${wo.number}` } });
+  await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "invoice", entity: "Invoice", entityId: invoice.id, detail: `WO-${wo.number}` } });
   emitWebhook("invoice.created", { ...invoice, workOrderNumber: wo.number, customer: { id: wo.customer.id, firstName: wo.customer.firstName, lastName: wo.customer.lastName, email: wo.customer.email } });
   revalidatePath(`/work-orders/${workOrderId}`);
   revalidatePath("/invoices");

@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db";
+import { db, currentShopId } from "@/lib/db";
 import { requireStaff, BILLING_ROLES } from "@/lib/auth";
 import { queueNotification } from "@/lib/notify";
 import { round2 } from "@/lib/money";
@@ -27,7 +27,7 @@ export async function recordPayment(invoiceId: string, formData: FormData) {
   if (paid >= Number(inv.total) - 0.005) {
     await queueNotification({ customerId: inv.customerId, workOrderId: inv.workOrderId, subject: "Payment received — thank you", body: `We received your payment of $${amount.toFixed(2)}. Your invoice is paid in full.` });
   }
-  await db.auditLog.create({ data: { userId: user.id, action: "payment", entity: "Invoice", entityId: invoiceId, detail: `$${amount.toFixed(2)} ${method}` } });
+  await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "payment", entity: "Invoice", entityId: invoiceId, detail: `$${amount.toFixed(2)} ${method}` } });
   emitWebhook("payment.recorded", { invoiceId, invoiceNumber: inv.number, amount, method, reference, amountPaid: paid, total: Number(inv.total), customerId: inv.customerId, by: user.name });
   if (paid >= Number(inv.total) - 0.005) emitWebhook("invoice.paid", { id: invoiceId, number: inv.number, total: Number(inv.total), customerId: inv.customerId, workOrderId: inv.workOrderId });
   revalidatePath(`/invoices/${invoiceId}`);
@@ -44,7 +44,7 @@ export async function voidInvoice(invoiceId: string) {
     db.invoice.update({ where: { id: invoiceId }, data: { status: "VOID" } }),
     db.workOrder.update({ where: { id: inv.workOrderId }, data: { status: "COMPLETED" } }),
   ]);
-  await db.auditLog.create({ data: { userId: user.id, action: "void", entity: "Invoice", entityId: invoiceId } });
+  await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "void", entity: "Invoice", entityId: invoiceId } });
   revalidatePath(`/invoices/${invoiceId}`);
   redirect(`/invoices/${invoiceId}?ok=Invoice+voided`);
 }

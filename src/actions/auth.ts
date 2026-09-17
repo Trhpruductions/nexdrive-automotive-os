@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { db } from "@/lib/db";
+import { rawDb } from "@/lib/db";
 import { createSession, destroySession, verifyPassword } from "@/lib/auth";
 
 export type LoginState = { error?: string } | undefined;
@@ -18,14 +18,18 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
 
   const { email, password, next } = parsed.data;
-  const user = await db.user.findUnique({ where: { email } });
+  const user = await rawDb.user.findUnique({ where: { email }, include: { shop: { select: { status: true } } } });
   if (!user || !user.active || !(await verifyPassword(password, user.passwordHash))) {
     return { error: "Email or password is incorrect" };
   }
 
-  await createSession(user.id);
-  await db.auditLog.create({ data: { userId: user.id, action: "login", entity: "User", entityId: user.id } });
+  if (user.shop && (user.shop.status === "SUSPENDED" || user.shop.status === "CANCELLED") && user.role !== "SUPERADMIN") {
+    return { error: "This shop's NexDrive account is suspended. Contact NexDrive support." };
+  }
+  await createSession(user);
+  await rawDb.auditLog.create({ data: { userId: user.id, shopId: user.shopId, action: "login", entity: "User", entityId: user.id } });
 
+  if (user.role === "SUPERADMIN") redirect("/admin");
   if (user.role === "CUSTOMER") redirect("/portal");
   redirect(next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard");
 }

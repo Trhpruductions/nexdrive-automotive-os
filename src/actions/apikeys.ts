@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db";
+import { db, currentShopId } from "@/lib/db";
 import { requireStaff, MANAGER_ROLES } from "@/lib/auth";
 import { API_SCOPES, hashKey, newApiKey, newWebhookSecret } from "@/lib/api";
 import { WEBHOOK_EVENTS, deliverOne } from "@/lib/webhooks";
@@ -17,8 +17,8 @@ export async function createApiKey(formData: FormData) {
   if (!scopes.length) back("Pick at least one scope", true);
   const expiresRaw = String(formData.get("expiresAt") ?? "");
   const key = newApiKey();
-  const row = await db.apiKey.create({ data: { name, scopes, keyHash: hashKey(key), keyPrefix: key.slice(0, 12), expiresAt: expiresRaw ? new Date(expiresRaw) : null, createdBy: user.name } });
-  await db.auditLog.create({ data: { userId: user.id, action: "create", entity: "ApiKey", entityId: row.id, detail: name } });
+  const row = await db.apiKey.create({ data: { shopId: await currentShopId(), name, scopes, keyHash: hashKey(key), keyPrefix: key.slice(0, 12), expiresAt: expiresRaw ? new Date(expiresRaw) : null, createdBy: user.name } });
+  await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "create", entity: "ApiKey", entityId: row.id, detail: name } });
   revalidatePath("/settings");
   back(`API key "${name}" created — copy it now, it is only shown once.`, false, `&newKey=${encodeURIComponent(key)}&newId=${row.id}`);
 }
@@ -35,14 +35,14 @@ export async function rotateApiKey(id: string) {
   const user = await requireStaff(MANAGER_ROLES);
   const key = newApiKey();
   const row = await db.apiKey.update({ where: { id }, data: { keyHash: hashKey(key), keyPrefix: key.slice(0, 12), enabled: true } });
-  await db.auditLog.create({ data: { userId: user.id, action: "rotate", entity: "ApiKey", entityId: id, detail: row.name } });
+  await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "rotate", entity: "ApiKey", entityId: id, detail: row.name } });
   back(`${row.name} rotated — the old key stopped working.`, false, `&newKey=${encodeURIComponent(key)}&newId=${id}`);
 }
 
 export async function deleteApiKey(id: string) {
   const user = await requireStaff(MANAGER_ROLES);
   const row = await db.apiKey.delete({ where: { id } });
-  await db.auditLog.create({ data: { userId: user.id, action: "delete", entity: "ApiKey", entityId: id, detail: row.name } });
+  await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "delete", entity: "ApiKey", entityId: id, detail: row.name } });
   revalidatePath("/settings");
   back(`${row.name} revoked`);
 }
@@ -56,7 +56,7 @@ export async function createWebhook(formData: FormData) {
   if (!name || !/^https?:\/\//i.test(url)) back("Name and an http(s) URL are required", true);
   const events = formData.getAll("events").map(String).filter((e) => (WEBHOOK_EVENTS as readonly string[]).includes(e));
   const secret = newWebhookSecret();
-  const row = await db.webhookEndpoint.create({ data: { name, url, secret, events } });
+  const row = await db.webhookEndpoint.create({ data: { shopId: await currentShopId(), name, url, secret, events } });
   revalidatePath("/settings");
   back(`Webhook "${name}" added — copy the signing secret now.`, false, `&newSecret=${encodeURIComponent(secret)}&newHook=${row.id}`);
 }

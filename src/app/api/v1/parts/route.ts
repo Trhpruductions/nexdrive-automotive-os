@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, currentShopId } from "@/lib/db";
 import { ApiError, handler, json, num, pageResponse, paging, readBody, str } from "@/lib/api";
 
 const ci = (q: string) => ({ contains: q, mode: "insensitive" as const });
@@ -18,13 +18,13 @@ export const GET = handler("read", async (req) => {
 export const POST = handler("write", async (req) => {
   const b = await readBody(req);
   const sku = str(b.sku, "sku", { required: true, max: 60 })!.toUpperCase();
-  if (await db.part.findUnique({ where: { sku } })) throw new ApiError(409, "That SKU already exists.", "conflict");
+  if (await db.part.findFirst({ where: { sku } })) throw new ApiError(409, "That SKU already exists.", "conflict");
   let supplierId: string | null = null;
   const supplier = str(b.supplier, "supplier", { max: 120 });
-  if (supplier) supplierId = (await db.supplier.upsert({ where: { name: supplier }, update: {}, create: { name: supplier } })).id;
+  if (supplier) supplierId = (await db.supplier.upsert({ where: { shopId_name: { shopId: await currentShopId(), name: supplier } }, update: {}, create: { shopId: await currentShopId(), name: supplier } })).id;
   const qty = num(b.quantityOnHand, "quantityOnHand", { int: true, min: 0 }) ?? 0;
   const part = await db.part.create({
-    data: {
+    data: { shopId: await currentShopId(),
       sku,
       name: str(b.name, "name", { required: true, max: 200 })!,
       description: str(b.description, "description", { max: 2000 }) ?? null,

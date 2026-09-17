@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, currentShopId, nextNumber } from "@/lib/db";
 import { ApiError, date, handler, json, num, pageResponse, paging, readBody, str } from "@/lib/api";
 import { getSettings } from "@/lib/settings";
 import { computeTotals } from "@/lib/money";
@@ -51,7 +51,8 @@ export const POST = handler("write", async (req, { key }) => {
     };
   });
   const wo = await db.workOrder.create({
-    data: {
+    data: { shopId: await currentShopId(),
+      number: await nextNumber("wo"),
       customerId: vehicle.customerId,
       vehicleId,
       complaint: str(b.complaint, "complaint", { required: true, max: 2000 })!,
@@ -63,7 +64,7 @@ export const POST = handler("write", async (req, { key }) => {
     },
     include: { lines: true, customer: true, vehicle: true },
   });
-  await db.auditLog.create({ data: { action: "create", entity: "WorkOrder", entityId: wo.id, detail: `#${wo.number} via API key ${key.name}` } });
+  await db.auditLog.create({ data: { shopId: await currentShopId(), action: "create", entity: "WorkOrder", entityId: wo.id, detail: `#${wo.number} via API key ${key.name}` } });
   emitWebhook("work_order.created", wo);
   return json({ ...wo, totals: computeTotals(wo.lines, settings.taxRate, { taxExempt: wo.customer.taxExempt }) }, { status: 201 });
 });

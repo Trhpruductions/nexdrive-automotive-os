@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, currentShopId } from "@/lib/db";
 import { ApiError, handler, json, num, pageResponse, paging, readBody, str } from "@/lib/api";
 import { emitWebhook } from "@/lib/webhooks";
 
@@ -23,9 +23,9 @@ export const POST = handler("write", async (req) => {
   const customerId = str(b.customerId, "customerId", { required: true })!;
   if (!(await db.customer.findUnique({ where: { id: customerId } }))) throw new ApiError(422, "customerId does not exist.", "validation");
   const vin = str(b.vin, "vin", { max: 17 })?.toUpperCase() ?? null;
-  if (vin && (await db.vehicle.findUnique({ where: { vin } }))) throw new ApiError(409, "A vehicle with that VIN already exists.", "conflict");
+  if (vin && (await db.vehicle.findFirst({ where: { vin } }))) throw new ApiError(409, "A vehicle with that VIN already exists.", "conflict");
   const v = await db.vehicle.create({
-    data: {
+    data: { shopId: await currentShopId(),
       customerId,
       year: num(b.year, "year", { required: true, int: true, min: 1900 })!,
       make: str(b.make, "make", { required: true, max: 60 })!,

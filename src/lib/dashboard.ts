@@ -62,7 +62,7 @@ export async function getDashboard(range: Range = "monthly") {
       orderBy: { scheduledStart: "asc" },
     }),
     db.bay.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
-    db.shopSettings.findUnique({ where: { id: 1 } }),
+    db.shopSettings.findFirst(),
   ]);
 
   const todayRevenue = Number(todayPayments._sum.amount ?? 0);

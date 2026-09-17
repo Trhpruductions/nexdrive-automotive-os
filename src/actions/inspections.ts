@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db";
+import { db, currentShopId } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
 import type { InspectionResult } from "@/generated/prisma/enums";
 
@@ -13,7 +13,7 @@ export async function startInspection(workOrderId: string) {
   if (wo.inspection) redirect(`/inspections/${wo.inspection.id}`);
   const template = await db.inspectionTemplateItem.findMany({ where: { active: true }, orderBy: { sortOrder: "asc" } });
   const inspection = await db.inspection.create({
-    data: {
+    data: { shopId: await currentShopId(),
       workOrderId,
       vehicleId: wo.vehicleId,
       technicianId: wo.technicianId ?? user.technicianId,

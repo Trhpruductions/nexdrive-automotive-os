@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { db } from "@/lib/db";
+import { db, rawDb, withShop } from "@/lib/db";
 import { applyEvents, sweepOfflineMachines } from "./events";
 import { extractRecords, mapRecord, matchTopic, parseCsv, type Mapping } from "./mapping";
 
@@ -42,7 +42,7 @@ export async function resyncIntegrations() {
 }
 
 async function sync() {
-  const rows = await db.integration.findMany({ where: { enabled: true, type: { in: ["MQTT", "REST_POLL", "CSV_FEED"] } } });
+  const rows = await rawDb.integration.findMany({ where: { enabled: true, type: { in: ["MQTT", "REST_POLL", "CSV_FEED"] }, shop: { status: { in: ["TRIAL", "ACTIVE", "PAST_DUE"] } } } });
   const want = new Map(rows.map((r) => [r.id, r]));
   // stop removed / changed
   for (const [id, runner] of state.runners) {
@@ -61,12 +61,12 @@ async function sync() {
       const runner = row.type === "MQTT" ? await startMqtt(row) : row.type === "REST_POLL" ? startPoller(row, pollRest) : startPoller(row, pollCsv);
       state.runners.set(row.id, { ...runner, kind: sig });
     } catch (e) {
-      await db.integration.update({ where: { id: row.id }, data: { lastError: e instanceof Error ? e.message : String(e) } }).catch(() => null);
+      await rawDb.integration.update({ where: { id: row.id }, data: { lastError: e instanceof Error ? e.message : String(e) } }).catch(() => null);
     }
   }
 }
 
-type Row = { id: string; name: string; config: unknown };
+type Row = { id: string; name: string; config: unknown; shopId: string };
 type Cfg = { url?: string; method?: string; headers?: Record<string, string>; intervalSec?: number; mapping?: Mapping; broker?: string; username?: string; password?: string; topics?: string[]; columns?: Record<string, string>; skuColumn?: string; qtyColumn?: string; costColumn?: string; priceColumn?: string; nameColumn?: string; supplier?: string; mode?: "set" | "price" | "both" };
 
 function cfgOf(row: Row): Cfg {
@@ -82,15 +82,15 @@ async function startMqtt(row: Row): Promise<Omit<Runner, "kind">> {
   const topics = (cfg.topics?.length ? cfg.topics : ["#"]).map((t) => t.trim()).filter(Boolean);
   client.on("connect", () => {
     client.subscribe(topics, (err) => {
-      if (err) db.integration.update({ where: { id: row.id }, data: { lastError: `subscribe: ${err.message}` } }).catch(() => null);
-      else db.integration.update({ where: { id: row.id }, data: { lastError: null, lastSeenAt: new Date() } }).catch(() => null);
+      if (err) rawDb.integration.update({ where: { id: row.id }, data: { lastError: `subscribe: ${err.message}` } }).catch(() => null);
+      else rawDb.integration.update({ where: { id: row.id }, data: { lastError: null, lastSeenAt: new Date() } }).catch(() => null);
     });
   });
   client.on("error", (err) => {
-    db.integration.update({ where: { id: row.id }, data: { lastError: err.message } }).catch(() => null);
+    rawDb.integration.update({ where: { id: row.id }, data: { lastError: err.message } }).catch(() => null);
   });
   client.on("message", (topic, buf) => {
-    void handleMqttMessage(row, cfg, topic, buf.toString("utf8"));
+    void withShop(row.shopId, () => handleMqttMessage(row, cfg, topic, buf.toString("utf8")));
   });
   return { stop: () => client.end(true) };
 }
@@ -135,10 +135,10 @@ function startPoller(row: Row, fn: (row: Row, cfg: Cfg) => Promise<void>): Omit<
     if (busy) return;
     busy = true;
     try {
-      await fn(row, cfg);
+      await withShop(row.shopId, () => fn(row, cfg));
     } catch (e) {
-      await db.integration.update({ where: { id: row.id }, data: { lastError: e instanceof Error ? e.message : String(e) } }).catch(() => null);
-      await db.ingestLog.create({ data: { integrationId: row.id, source: `poll:${row.name}`, ok: false, summary: "Poll failed", error: e instanceof Error ? e.message : String(e) } }).catch(() => null);
+      await rawDb.integration.update({ where: { id: row.id }, data: { lastError: e instanceof Error ? e.message : String(e) } }).catch(() => null);
+      await rawDb.ingestLog.create({ data: { shopId: row.shopId, integrationId: row.id, source: `poll:${row.name}`, ok: false, summary: "Poll failed", error: e instanceof Error ? e.message : String(e) } }).catch(() => null);
     } finally {
       busy = false;
     }
@@ -191,6 +191,7 @@ async function pollCsv(row: Row, cfg: Cfg) {
 /** Run one poll immediately (Settings → "Test now"). */
 export async function runIntegrationOnce(id: string) {
   const row = await db.integration.findUniqueOrThrow({ where: { id } });
+  // the caller (a settings action) already runs inside the shop's context
   const cfg = cfgOf(row);
   if (row.type === "REST_POLL") await pollRest(row, cfg);
   else if (row.type === "CSV_FEED") await pollCsv(row, cfg);

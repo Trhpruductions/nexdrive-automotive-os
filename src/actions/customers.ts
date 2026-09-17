@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { db } from "@/lib/db";
+import { db, rawDb, currentShopId } from "@/lib/db";
 import { hashPassword, requireStaff } from "@/lib/auth";
 import { emitWebhook } from "@/lib/webhooks";
 
@@ -34,8 +34,8 @@ export async function createCustomer(_prev: FormState, formData: FormData): Prom
   const user = await requireStaff();
   const parsed = parse(CustomerSchema, formData);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
-  const customer = await db.customer.create({ data: parsed.data });
-  await db.auditLog.create({ data: { userId: user.id, action: "create", entity: "Customer", entityId: customer.id, detail: `${customer.firstName} ${customer.lastName}` } });
+  const customer = await db.customer.create({ data: { ...parsed.data, shopId: await currentShopId() } });
+  await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "create", entity: "Customer", entityId: customer.id, detail: `${customer.firstName} ${customer.lastName}` } });
   emitWebhook("customer.created", customer);
   revalidatePath("/customers");
   const returnTo = formData.get("returnTo");
@@ -75,9 +75,9 @@ export async function setPortalAccess(customerId: string, formData: FormData) {
   if (customer.portalUser) {
     await db.user.update({ where: { id: customer.portalUser.id }, data: { passwordHash, email, active: true } });
   } else {
-    const taken = await db.user.findUnique({ where: { email } });
+    const taken = await rawDb.user.findUnique({ where: { email } });
     if (taken) redirect(`/customers/${customerId}?error=That+email+already+has+a+login`);
-    await db.user.create({ data: { email, passwordHash, name: `${customer.firstName} ${customer.lastName}`, role: "CUSTOMER", customerId } });
+    await db.user.create({ data: { shopId: await currentShopId(), email, passwordHash, name: `${customer.firstName} ${customer.lastName}`, role: "CUSTOMER", customerId } });
   }
   revalidatePath(`/customers/${customerId}`);
   redirect(`/customers/${customerId}?ok=Portal+access+ready`);

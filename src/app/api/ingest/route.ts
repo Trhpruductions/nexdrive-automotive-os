@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { db } from "@/lib/db";
+import { rawDb, withShop } from "@/lib/db";
 import { applyEvents } from "@/lib/integrations/events";
 import { extractRecords, mapRecord, type Mapping } from "@/lib/integrations/mapping";
 import { hashKey } from "@/lib/integrations/runtime";
@@ -18,12 +18,12 @@ export async function POST(req: NextRequest) {
   const auth = req.headers.get("authorization") ?? "";
   const key = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : (req.headers.get("x-api-key") ?? "").trim();
   if (!key) return NextResponse.json({ ok: false, error: "Missing API key" }, { status: 401 });
-  let integration = await db.integration.findUnique({ where: { keyHash: hashKey(key) } });
+  let integration = await rawDb.integration.findUnique({ where: { keyHash: hashKey(key) } });
   if (!integration) {
     // an API key from Settings -> API & Webhooks with the ingest scope works here too
-    const apiKey = await db.apiKey.findUnique({ where: { keyHash: hashKey(key) } });
+    const apiKey = await rawDb.apiKey.findUnique({ where: { keyHash: hashKey(key) } });
     if (apiKey && apiKey.enabled && apiKey.scopes.includes("ingest") && (!apiKey.expiresAt || apiKey.expiresAt > new Date())) {
-      integration = { id: "", name: `api:${apiKey.name}`, type: "WEBHOOK", enabled: true, keyHash: null, keyPrefix: null, config: {}, lastSeenAt: null, lastError: null, eventCount: 0, createdAt: new Date(), updatedAt: new Date() };
+      integration = { id: "", shopId: apiKey.shopId, name: `api:${apiKey.name}`, type: "WEBHOOK", enabled: true, keyHash: null, keyPrefix: null, config: {}, lastSeenAt: null, lastError: null, eventCount: 0, createdAt: new Date(), updatedAt: new Date() };
     }
   }
   if (!integration || !integration.enabled) return NextResponse.json({ ok: false, error: "Invalid or disabled API key" }, { status: 401 });
@@ -39,7 +39,8 @@ export async function POST(req: NextRequest) {
   if (!records.length) return NextResponse.json({ ok: false, error: "No events found in payload" }, { status: 400 });
   if (records.length > 5000) return NextResponse.json({ ok: false, error: "Max 5000 events per request" }, { status: 413 });
 
-  const result = await applyEvents(records, { integrationId: integration.id || undefined, source: `webhook:${integration.name}` });
+  const shopId = integration.shopId;
+  const result = await withShop(shopId, () => applyEvents(records, { integrationId: integration.id || undefined, source: `webhook:${integration.name}` }));
   return NextResponse.json({ ok: result.errors.length === 0, applied: result.applied, rejected: result.errors.length, errors: result.errors.slice(0, 20) }, { status: result.applied ? 200 : 422 });
 }
 

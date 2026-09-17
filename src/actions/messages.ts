@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db";
+import { db, currentShopId } from "@/lib/db";
 import { requireCustomer, requireStaff } from "@/lib/auth";
 import { queueNotification } from "@/lib/notify";
 
@@ -11,7 +11,7 @@ export async function sendStaffMessage(customerId: string, formData: FormData) {
   const body = String(formData.get("body") ?? "").trim();
   const workOrderId = String(formData.get("workOrderId") ?? "") || null;
   if (!body) redirect(`/messages/${customerId}?error=Type+a+message`);
-  await db.message.create({ data: { customerId, workOrderId, direction: "OUTBOUND", body, authorName: user.name } });
+  await db.message.create({ data: { shopId: await currentShopId(), customerId, workOrderId, direction: "OUTBOUND", body, authorName: user.name } });
   await queueNotification({ customerId, workOrderId, subject: `New message from ${user.name}`, body, channels: ["EMAIL", "SMS"] });
   revalidatePath(`/messages/${customerId}`);
   revalidatePath("/messages");
@@ -29,7 +29,7 @@ export async function sendPortalMessage(formData: FormData) {
   const body = String(formData.get("body") ?? "").trim();
   const workOrderId = String(formData.get("workOrderId") ?? "") || null;
   if (!body) redirect(`/portal/messages?error=Type+a+message`);
-  await db.message.create({ data: { customerId: user.customerId, workOrderId, direction: "INBOUND", body, authorName: user.name } });
+  await db.message.create({ data: { shopId: await currentShopId(), customerId: user.customerId, workOrderId, direction: "INBOUND", body, authorName: user.name } });
   revalidatePath("/portal/messages");
   revalidatePath("/messages");
   redirect("/portal/messages?ok=Message+sent");

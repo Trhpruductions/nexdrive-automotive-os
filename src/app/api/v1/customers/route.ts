@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, currentShopId } from "@/lib/db";
 import { handler, json, pageResponse, paging, readBody, str } from "@/lib/api";
 import { emitWebhook } from "@/lib/webhooks";
 
@@ -29,8 +29,8 @@ export const POST = handler("write", async (req, { key }) => {
     notes: str(b.notes, "notes", { max: 2000 }) ?? null,
     taxExempt: Boolean(b.taxExempt),
   };
-  const customer = await db.customer.create({ data });
-  await db.auditLog.create({ data: { action: "create", entity: "Customer", entityId: customer.id, detail: `via API key ${key.name}` } });
+  const customer = await db.customer.create({ data: { ...data, shopId: await currentShopId() } });
+  await db.auditLog.create({ data: { shopId: await currentShopId(), action: "create", entity: "Customer", entityId: customer.id, detail: `via API key ${key.name}` } });
   emitWebhook("customer.created", customer);
   return json(customer, { status: 201 });
 });

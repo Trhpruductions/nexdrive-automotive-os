@@ -105,6 +105,7 @@ export const INSPECTION_RESULT: Record<InspectionResult, { label: string; tone: 
 };
 
 export const ROLE_LABEL: Record<Role, string> = {
+  SUPERADMIN: "NexDrive Admin",
   OWNER: "Shop Owner",
   ADMIN: "Admin",
   SERVICE_ADVISOR: "Service Advisor",

@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { endOfDay, format, startOfDay, subDays, subMonths } from "date-fns";
-import { db } from "./db";
+import { db, currentShopId, nextNumber } from "./db";
 import { getSettings } from "./settings";
 import { getDashboard } from "./dashboard";
 import { computeTotals } from "./money";
@@ -53,7 +53,7 @@ function buildTools(user: SessionUser, taxRate: number) {
     description: "Full detail for one work order by its number (e.g. 12 for WO-00012): lines, totals, diagnosis, approval state, inspection results.",
     inputSchema: z.object({ number: z.number().int() }),
     run: async ({ number }) => {
-      const w = await db.workOrder.findUnique({ where: { number }, include: { customer: true, vehicle: true, technician: true, lines: true, inspection: { include: { items: true } }, invoice: true } });
+      const w = await db.workOrder.findFirst({ where: { number }, include: { customer: true, vehicle: true, technician: true, lines: true, inspection: { include: { items: true } }, invoice: true } });
       if (!w) return "Not found";
       return JSON.stringify({ ...w, url: woUrl(w.id), totals: computeTotals(w.lines, taxRate, { taxExempt: w.customer.taxExempt }), inspectionFindings: w.inspection?.items.filter((i) => i.result !== "GOOD" && i.result !== "NA").map((i) => `${i.name}: ${i.result}${i.notes ? ` (${i.notes})` : ""}`) });
     },
@@ -156,7 +156,7 @@ function buildTools(user: SessionUser, taxRate: number) {
       const vehicle = await db.vehicle.findUnique({ where: { id: vehicleId } });
       if (!vehicle) return "Vehicle not found";
       const settings = await getSettings();
-      const wo = await db.workOrder.create({ data: { customerId: vehicle.customerId, vehicleId, complaint, mileageIn: vehicle.mileage } });
+      const wo = await db.workOrder.create({ data: { shopId: await currentShopId(), number: await nextNumber("wo"), customerId: vehicle.customerId, vehicleId, complaint, mileageIn: vehicle.mileage } });
       let applied: string | null = null;
       if (cannedService) {
         const svc = await db.cannedService.findFirst({ where: { name: ci(cannedService), active: true }, include: { parts: { include: { part: true } } } });
@@ -167,7 +167,7 @@ function buildTools(user: SessionUser, taxRate: number) {
           applied = svc.name;
         }
       }
-      await db.auditLog.create({ data: { userId: user.id, action: "create", entity: "WorkOrder", entityId: wo.id, detail: `#${wo.number} via NexDrive AI` } });
+      await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "create", entity: "WorkOrder", entityId: wo.id, detail: `#${wo.number} via NexDrive AI` } });
       return JSON.stringify({ number: wo.number, url: woUrl(wo.id), appliedService: applied });
     },
   });

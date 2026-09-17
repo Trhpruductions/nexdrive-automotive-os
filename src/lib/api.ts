@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
-import { db } from "./db";
+import { rawDb, withShop } from "./db";
 
 /**
  * Developer API (/api/v1). Keys are issued under Settings -> API & Webhooks and
@@ -23,19 +23,20 @@ export class ApiError extends Error {
   }
 }
 
-export type ApiKeyContext = { id: string; name: string; scopes: string[] };
+export type ApiKeyContext = { id: string; name: string; scopes: string[]; shopId: string };
 
 /** Resolve + validate the key on a request. Throws ApiError on failure. */
 export async function authenticate(req: NextRequest, scope: ApiScope): Promise<ApiKeyContext> {
   const auth = req.headers.get("authorization") ?? "";
   const key = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : (req.headers.get("x-api-key") ?? "").trim();
   if (!key) throw new ApiError(401, "Missing API key. Send `Authorization: Bearer <key>`.", "unauthorized");
-  const row = await db.apiKey.findUnique({ where: { keyHash: hashKey(key) } });
+  const row = await rawDb.apiKey.findUnique({ where: { keyHash: hashKey(key) }, include: { shop: { select: { status: true } } } });
   if (!row || !row.enabled) throw new ApiError(401, "Invalid or revoked API key.", "unauthorized");
   if (row.expiresAt && row.expiresAt < new Date()) throw new ApiError(401, "API key has expired.", "unauthorized");
+  if (row.shop.status === "SUSPENDED" || row.shop.status === "CANCELLED") throw new ApiError(403, "This shop's NexDrive account is suspended.", "forbidden");
   if (!row.scopes.includes(scope)) throw new ApiError(403, `This key lacks the "${scope}" scope.`, "forbidden");
-  db.apiKey.update({ where: { id: row.id }, data: { lastUsedAt: new Date(), useCount: { increment: 1 } } }).catch(() => null);
-  return { id: row.id, name: row.name, scopes: row.scopes };
+  rawDb.apiKey.update({ where: { id: row.id }, data: { lastUsedAt: new Date(), useCount: { increment: 1 } } }).catch(() => null);
+  return { id: row.id, name: row.name, scopes: row.scopes, shopId: row.shopId };
 }
 
 export function json(data: unknown, init?: ResponseInit) {
@@ -56,7 +57,7 @@ export function handler(scope: ApiScope, fn: (req: NextRequest, ctx: { key: ApiK
     try {
       const key = await authenticate(req, scope);
       const params = routeCtx?.params ? await routeCtx.params : {};
-      return await fn(req, { key, params });
+      return await withShop(key.shopId, () => fn(req, { key, params }));
     } catch (e) {
       return errorResponse(e);
     }
@@ -94,7 +95,7 @@ export function serialize(value: unknown): unknown {
     if (typeof v.toNumber === "function" && v.constructor?.name === "Decimal") return v.toNumber();
     const out: Record<string, unknown> = {};
     for (const [k, val] of Object.entries(value as Record<string, unknown>)) {
-      if (k === "passwordHash" || k === "keyHash" || k === "secret") continue;
+      if (k === "passwordHash" || k === "keyHash" || k === "secret" || k === "approvalToken") continue;
       out[k] = serialize(val);
     }
     return out;

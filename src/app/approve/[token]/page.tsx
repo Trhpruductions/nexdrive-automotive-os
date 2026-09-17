@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { CheckCircle2, XCircle } from "lucide-react";
-import { db } from "@/lib/db";
+import { db, rawDb, withShop } from "@/lib/db";
 import { getSettings, shopAddress } from "@/lib/settings";
 import { EstimateApproval } from "@/components/app/estimate-approval";
 import { respondToEstimate } from "@/actions/workorders";
@@ -14,8 +14,14 @@ export const metadata = { title: "Approve your estimate" };
 export default async function ApprovePage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ done?: string; error?: string }> }) {
   const { token } = await params;
   const sp = await searchParams;
+  const found = await rawDb.workOrder.findUnique({ where: { approvalToken: token }, select: { shopId: true } });
+  if (!found) notFound();
+  return withShop(found.shopId, () => ApprovePageScoped({ token, sp }));
+}
+
+async function ApprovePageScoped({ token, sp }: { token: string; sp: { done?: string; error?: string } }) {
   const s = await getSettings();
-  const w = await db.workOrder.findUnique({ where: { approvalToken: token }, include: { customer: true, vehicle: true, lines: { orderBy: { sortOrder: "asc" } }, inspection: { include: { items: true } } } });
+  const w = await db.workOrder.findFirst({ where: { approvalToken: token }, include: { customer: true, vehicle: true, lines: { orderBy: { sortOrder: "asc" } }, inspection: { include: { items: true } } } });
   if (!w) notFound();
   const totals = computeTotals(w.lines, s.taxRate, { taxExempt: w.customer.taxExempt });
   const findings = w.inspection?.items.filter((i) => i.result === "URGENT" || i.result === "ATTENTION") ?? [];
