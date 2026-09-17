@@ -21,6 +21,8 @@ export async function proxy(request: NextRequest) {
 
   const userId = await userIdFromCookie(request.cookies.get(SESSION_COOKIE)?.value);
   if (!userId) {
+    // API routes answer with JSON instead of bouncing to the sign-in page
+    if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = pathname.startsWith("/portal") ? "?portal=1" : `?next=${encodeURIComponent(pathname)}`;

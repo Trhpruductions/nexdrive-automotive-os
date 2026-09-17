@@ -37,12 +37,15 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
     return { error: "Email or password is incorrect" };
   }
 
-  if (user.shop && (user.shop.status === "SUSPENDED" || user.shop.status === "CANCELLED") && user.role !== "SUPERADMIN") {
-    return { error: "This shop's NexDrive account is suspended. Contact NexDrive support." };
+  const blocked = Boolean(user.shop && (user.shop.status === "SUSPENDED" || user.shop.status === "CANCELLED") && user.role !== "SUPERADMIN");
+  // the owner may still sign in to fix billing; everyone else waits
+  if (blocked && user.role !== "OWNER") {
+    return { error: "This shop's NexDrive account is suspended. Ask the shop owner to choose a plan, or contact NexDrive support." };
   }
   rateReset(key);
   await createSession(user);
   await rawDb.auditLog.create({ data: { userId: user.id, shopId: user.shopId, action: "login", entity: "User", entityId: user.id } });
+  if (blocked) redirect("/suspended");
 
   if (user.role === "SUPERADMIN") redirect("/admin");
   if (user.role === "CUSTOMER") redirect("/portal");

@@ -37,6 +37,10 @@ model Shop {
   trialEndsAt DateTime?
   ownerEmail  String?
   notes       String?
+  // NexDrive subscription (platform Stripe account)
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  currentPeriodEnd     DateTime?
   woSeq       Int        @default(0)
   invSeq      Int        @default(0)
   poSeq       Int        @default(0)

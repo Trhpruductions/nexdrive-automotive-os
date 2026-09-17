@@ -68,7 +68,9 @@ Copy `.next/static` to `.next/standalone/.next/static` and `public` to `.next/st
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | no | SMS delivery |
 | `NEXDRIVE_DISABLE_INTEGRATIONS` | no | `1` skips starting MQTT/pollers and the reminder scheduler (for one-off jobs) |
 
-Card payments (Stripe) are configured per shop under Settings → Payments, not by environment variables — each shop uses its own Stripe account and webhook endpoint `/api/stripe/webhook/{shopId}`.
+| `STRIPE_PLATFORM_SECRET_KEY`, `STRIPE_PLATFORM_WEBHOOK_SECRET`, `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PRO` | no | NexDrive's own subscriptions (self-service `/billing`); webhook endpoint `/api/stripe/platform` |
+
+Card payments for a shop's *customers* (Stripe) are configured per shop under Settings → Payments, not by environment variables — each shop uses its own Stripe account and webhook endpoint `/api/stripe/webhook/{shopId}`.
 
 ## Sizing & operations
 

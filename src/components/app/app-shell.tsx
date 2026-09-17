@@ -95,6 +95,11 @@ export function AppShell({
                   <Link href="/settings" onClick={() => setMenu(false)} className="block rounded-md px-3 py-2 text-sm text-muted hover:text-text hover:bg-card-hover">
                     Shop settings
                   </Link>
+                  {user.role === "OWNER" || user.role === "SUPERADMIN" ? (
+                    <Link href="/billing" onClick={() => setMenu(false)} className="block rounded-md px-3 py-2 text-sm text-muted hover:text-text hover:bg-card-hover">
+                      Billing &amp; plan
+                    </Link>
+                  ) : null}
                   <form action={logout}>
                     <button className="w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted hover:text-text hover:bg-card-hover">
                       <LogOut size={14} /> Sign out

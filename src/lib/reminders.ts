@@ -47,7 +47,11 @@ let timer: NodeJS.Timeout | null = null;
 /** Hourly scheduler; safe to call more than once. */
 export function startReminderScheduler() {
   if (timer) return;
-  const run = () => sendDueReminders().catch((e) => console.error("[nexdrive] reminder run failed", e));
+  const run = async () => {
+    await sendDueReminders().catch((e) => console.error("[nexdrive] reminder run failed", e));
+    const { expireTrials } = await import("./billing");
+    await expireTrials().then((n) => n && console.log(`[nexdrive] ${n} expired trial(s) suspended`)).catch((e) => console.error("[nexdrive] trial expiry failed", e));
+  };
   timer = setInterval(run, 60 * 60 * 1000);
   timer.unref?.();
   setTimeout(run, 30 * 1000).unref?.();

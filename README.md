@@ -27,6 +27,9 @@ New shops self-serve at `/signup` (14-day trial, every module enabled).
 
 ## Multi-shop (SaaS)
 
+**Plans & billing.** Every new shop starts a 14-day trial; a banner counts down the last week and the hourly scheduler suspends expired trials (data is kept). Owners manage their plan at `/billing`. With NexDrive's own Stripe keys in the environment (`STRIPE_PLATFORM_SECRET_KEY`, `STRIPE_PLATFORM_WEBHOOK_SECRET`, `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PRO`) that page sells Starter/Pro through Stripe Checkout and the webhook at `/api/stripe/platform` keeps the shop's plan, status and renewal date in step (failed payment → "past due" banner; cancelled → suspended until the owner re-subscribes). Without those keys, plans are set by hand in the admin console.
+
+
 One installation serves any number of shops. Every shop-owned table carries a `shopId`, and `src/lib/db.ts` wraps Prisma so that **every query is filtered to the current shop automatically** (from the session, or `withShop()` for background work) — a shop-scoped query with no shop context throws rather than leaking. Work-order and invoice numbers are per-shop sequences. Staff logins belong to one shop; `SUPERADMIN` users (NexDrive Productions) manage all shops from `/admin`, can open any shop, change plans/status/trials, reset owner passwords and review website leads. Suspended shops cannot sign in and their API keys stop working.
 
 Reset to the demo dataset at any time:
@@ -89,6 +92,9 @@ Around that core:
 - **Maintenance reminders** — due (within 14 days / 500 miles) reminders go out automatically every hour through the `reminder_due` template, once each; Settings → Notification templates has a "send now" button.
 - **CSV exports** — customers, vehicles, work orders, invoices, payments and parts (`/api/export/{entity}`, optional `?from=&to=`), from the Export button on each list.
 - **Accounts** — forgot-password with one-hour single-use links (email via Resend or SMTP), change-your-own-password under My account / portal account, and sign-in lockout after 10 failed attempts per email + IP.
+- **Import data** — Settings → Import data takes a CSV from the old system (customers, vehicles, parts), auto-matches columns, previews, and imports in chunks. Existing records are matched (email/phone/name, VIN/plate, SKU) and updated rather than duplicated.
+- **Activity log** — Settings → Activity log shows who did what (logins, payments, receipts, resets…), filterable by action.
+- **Custom 404 / error pages** so a bad link or a failed render never drops the user on a blank screen.
 
 ## Production lines & inventory feeds
 
@@ -143,6 +149,13 @@ Settings → **API & Webhooks** issues keys for other systems (accounting, parts
 Lists paginate with `?page=&limit=` (max 200) and return `{ data, page, limit, total, pages }`. Errors are `{ error: { code, message } }` with 401/403/404/409/422 as appropriate.
 
 **Outbound webhooks** notify other software when things happen: `customer.created`, `vehicle.created`, `work_order.created / status_changed / sent_for_approval / approved / declined`, `invoice.created / paid`, `payment.recorded`, `appointment.created / status_changed / rescheduled`, `part.low_stock`, `machine.status_changed / alarm`. Each delivery is a JSON envelope `{ id, event, at, data }` signed with `X-NexDrive-Signature: sha256=HMAC_SHA256(secret, body)`; failures retry twice and every delivery is logged in Settings.
+
+## Tests
+
+```bash
+npm test          # unit tests (money, CSV import mapping, templates, lanes, Stripe signatures, rate limit)
+NEXDRIVE_URL=http://127.0.0.1:4500 NEXDRIVE_API_KEY=nd_live_… npm run test:smoke   # HTTP smoke against a running server
+```
 
 ## Scripts
 

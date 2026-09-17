@@ -14,6 +14,8 @@ import { CannedServiceEditor } from "./canned-service-editor";
 import { IntegrationsTab } from "./integrations-tab";
 import { ApiTab } from "./api-tab";
 import { PaymentsTab } from "./payments-tab";
+import { ImportTab } from "./import-tab";
+import { ActivityTab } from "./activity-tab";
 import { CopyField } from "./copy-field";
 import { headers } from "next/headers";
 import { rawDb } from "@/lib/db";
@@ -33,9 +35,11 @@ const TABS = [
   { key: "payments", label: "Payments" },
   { key: "integrations", label: "Integrations" },
   { key: "api", label: "API & Webhooks" },
+  { key: "import", label: "Import data" },
+  { key: "activity", label: "Activity log" },
 ];
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string; ok?: string; error?: string; edit?: string; newKey?: string; newId?: string; newSecret?: string; newHook?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string; ok?: string; error?: string; edit?: string; newKey?: string; newId?: string; newSecret?: string; newHook?: string; page?: string; action?: string }> }) {
   const me = await requireStaff(MANAGER_ROLES);
   const s = await getSettings();
   const sp = await searchParams;
@@ -166,6 +170,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       ) : null}
       {tab === "users" ? <UsersTab meId={me.id} meRole={me.role} /> : null}
       {tab === "payments" ? <PaymentsTab shopId={me.activeShopId!} /> : null}
+      {tab === "import" ? <ImportTab /> : null}
+      {tab === "activity" ? <ActivityTab page={Math.max(1, Number(sp.page) || 1)} action={sp.action} /> : null}
       {tab === "integrations" ? <IntegrationsTab newKey={sp.newKey} newId={sp.newId} /> : null}
       {tab === "api" ? <ApiTab newKey={sp.newKey} newId={sp.newId} newSecret={sp.newSecret} newHook={sp.newHook} /> : null}
     </div>
