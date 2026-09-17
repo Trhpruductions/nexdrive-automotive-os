@@ -11,6 +11,12 @@ import { INVOICE_STATUS, WO_STATUS } from "@/lib/constants";
 import { computeTotals } from "@/lib/money";
 import { fmtDate, fmtDateTime, invNumber, money, num, vehicleName, woNumber } from "@/lib/format";
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const c = await db.customer.findUnique({ where: { id }, select: { firstName: true, lastName: true } });
+  return { title: c ? `${c.firstName} ${c.lastName}` : "Customer" };
+}
+
 export default async function CustomerPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ok?: string; error?: string }> }) {
   const user = await requireStaff();
   const settings = await getSettings();

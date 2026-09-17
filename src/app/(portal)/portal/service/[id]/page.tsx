@@ -13,6 +13,8 @@ import { fmtDateTime, invNumber, money, vehicleName, woNumber } from "@/lib/form
 
 const STEPS = ["Received", "Diagnosed", "Estimate", "Approved", "In repair", "Ready"] as const;
 
+export const metadata = { title: "Your service" };
+
 export default async function PortalServicePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ok?: string; error?: string }> }) {
   const user = await requireCustomer();
   const s = await getSettings();

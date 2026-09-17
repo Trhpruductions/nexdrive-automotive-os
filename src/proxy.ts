@@ -26,7 +26,9 @@ export async function proxy(request: NextRequest) {
     url.search = pathname.startsWith("/portal") ? "?portal=1" : `?next=${encodeURIComponent(pathname)}`;
     return NextResponse.redirect(url);
   }
-  return NextResponse.next();
+  const headers = new Headers(request.headers);
+  headers.set("x-pathname", pathname);
+  return NextResponse.next({ request: { headers } });
 }
 
 export const config = {

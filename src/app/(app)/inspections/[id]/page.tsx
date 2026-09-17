@@ -13,6 +13,12 @@ import { CarDiagram } from "./car-diagram";
 
 const RESULTS = ["GOOD", "ATTENTION", "URGENT", "NA"] as const;
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const i = await db.inspection.findUnique({ where: { id }, select: { vehicle: { select: { year: true, make: true, model: true } } } });
+  return { title: i ? `Inspection · ${vehicleName(i.vehicle)}` : "Inspection" };
+}
+
 export default async function InspectionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ cat?: string; ok?: string; error?: string }> }) {
   const user = await requireStaff();
   const { id } = await params;

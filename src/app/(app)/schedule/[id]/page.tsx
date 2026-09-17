@@ -9,6 +9,12 @@ import { deleteAppointment, setAppointmentStatus } from "@/actions/appointments"
 import { APPT_STATUS } from "@/lib/constants";
 import { fmtDateTime, fmtTime, vehicleName, woNumber } from "@/lib/format";
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const a = await db.appointment.findUnique({ where: { id }, select: { serviceRequested: true } });
+  return { title: a ? `Appointment · ${a.serviceRequested}` : "Appointment" };
+}
+
 export default async function AppointmentPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ok?: string; error?: string }> }) {
   await requireStaff();
   const { id } = await params;

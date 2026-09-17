@@ -25,6 +25,12 @@ const STEPS: { key: string; label: string }[] = [
   { key: "invoice", label: "Invoice" },
 ];
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const wo = await db.workOrder.findUnique({ where: { id }, select: { number: true } });
+  return { title: wo ? woNumber(wo.number) : "Work order" };
+}
+
 export default async function WorkOrderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ok?: string; error?: string }> }) {
   const user = await requireStaff();
   const settings = await getSettings();

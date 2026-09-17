@@ -13,6 +13,12 @@ import type { MachineStatus } from "@/generated/prisma/enums";
 
 const TONE: Record<MachineStatus, "green" | "amber" | "red" | "violet" | "slate"> = { RUNNING: "green", IDLE: "amber", DOWN: "red", MAINTENANCE: "violet", OFFLINE: "slate" };
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params;
+    const m = await db.machine.findUnique({ where: { id }, select: { name: true } });
+    return { title: m?.name ?? "Machine" };
+}
+
 export default async function MachinePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ok?: string; error?: string }> }) {
   const user = await requireStaff();
   const { id } = await params;

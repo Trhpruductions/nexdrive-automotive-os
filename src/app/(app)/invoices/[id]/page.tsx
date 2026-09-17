@@ -11,6 +11,12 @@ import { recordPayment, resendInvoice, updateInvoiceNotes, voidInvoice } from "@
 import { INVOICE_STATUS, PAYMENT_METHODS } from "@/lib/constants";
 import { fmtDateTime, invNumber, money, toDateInput, woNumber } from "@/lib/format";
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const inv = await db.invoice.findUnique({ where: { id }, select: { number: true } });
+  return { title: inv ? invNumber(inv.number) : "Invoice" };
+}
+
 export default async function InvoicePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ok?: string; error?: string }> }) {
   const user = await requireStaff(BILLING_ROLES);
   const settings = await getSettings();

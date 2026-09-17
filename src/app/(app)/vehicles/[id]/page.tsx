@@ -12,6 +12,12 @@ import { INSPECTION_RESULT, WO_STATUS } from "@/lib/constants";
 import { computeTotals } from "@/lib/money";
 import { fmtDate, fmtDateTime, money, num, vehicleName, woNumber } from "@/lib/format";
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const v = await db.vehicle.findUnique({ where: { id }, select: { year: true, make: true, model: true } });
+  return { title: v ? vehicleName(v) : "Vehicle" };
+}
+
 export default async function VehiclePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ok?: string; error?: string }> }) {
   const user = await requireStaff();
   const settings = await getSettings();

@@ -7,6 +7,12 @@ import { Avatar, Card, Flash, PageHeader } from "@/components/ui";
 import { sendStaffMessage } from "@/actions/messages";
 import { fmtDateTime, vehicleName, woNumber } from "@/lib/format";
 
+export async function generateMetadata({ params }: { params: Promise<{ customerId: string }> }) {
+  const { customerId } = await params;
+  const c = await db.customer.findUnique({ where: { id: customerId }, select: { firstName: true, lastName: true } });
+  return { title: c ? `Messages · ${c.firstName} ${c.lastName}` : "Messages" };
+}
+
 export default async function ThreadPage({ params, searchParams }: { params: Promise<{ customerId: string }>; searchParams: Promise<{ ok?: string; error?: string }> }) {
   await requireStaff();
   const { customerId } = await params;

@@ -7,6 +7,8 @@ import { getSettings } from "@/lib/settings";
 import { InvoiceSheet } from "@/components/app/invoice-sheet";
 import { PrintButton } from "@/components/app/print-button";
 
+export const metadata = { title: "Invoice" };
+
 export default async function PortalInvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireCustomer();
   const settings = await getSettings();

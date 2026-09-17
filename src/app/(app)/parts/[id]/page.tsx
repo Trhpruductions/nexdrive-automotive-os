@@ -9,6 +9,12 @@ import { ConfirmButton } from "@/components/app/confirm-button";
 import { adjustStock, deletePart } from "@/actions/parts";
 import { fmtDateTime, money, woNumber } from "@/lib/format";
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const p = await db.part.findUnique({ where: { id }, select: { name: true } });
+  return { title: p?.name ?? "Part" };
+}
+
 export default async function PartPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ok?: string; error?: string }> }) {
   const user = await requireStaff();
   const { id } = await params;

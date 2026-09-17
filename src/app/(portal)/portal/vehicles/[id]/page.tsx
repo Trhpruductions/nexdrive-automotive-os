@@ -7,6 +7,8 @@ import { Badge, Card } from "@/components/ui";
 import { WO_STATUS } from "@/lib/constants";
 import { fmtDate, invNumber, money, num, vehicleName } from "@/lib/format";
 
+export const metadata = { title: "My vehicle" };
+
 export default async function PortalVehiclePage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireCustomer();
   const { id } = await params;

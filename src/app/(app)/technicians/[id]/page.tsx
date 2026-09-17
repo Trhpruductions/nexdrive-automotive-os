@@ -9,6 +9,12 @@ import { clockTech } from "@/actions/technicians";
 import { WO_STATUS } from "@/lib/constants";
 import { fmtDateTime, fmtTime, money, vehicleName, woNumber } from "@/lib/format";
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const t = await db.technician.findUnique({ where: { id }, select: { name: true } });
+  return { title: t?.name ?? "Technician" };
+}
+
 export default async function TechnicianPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ok?: string; error?: string }> }) {
   const user = await requireStaff();
   const { id } = await params;
