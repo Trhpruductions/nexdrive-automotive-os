@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { requireStaff, BILLING_ROLES } from "@/lib/auth";
 import { queueNotification } from "@/lib/notify";
 import { round2 } from "@/lib/money";
+import { emitWebhook } from "@/lib/webhooks";
 import type { PaymentMethod } from "@/generated/prisma/enums";
 
 export async function recordPayment(invoiceId: string, formData: FormData) {
@@ -27,6 +28,8 @@ export async function recordPayment(invoiceId: string, formData: FormData) {
     await queueNotification({ customerId: inv.customerId, workOrderId: inv.workOrderId, subject: "Payment received — thank you", body: `We received your payment of $${amount.toFixed(2)}. Your invoice is paid in full.` });
   }
   await db.auditLog.create({ data: { userId: user.id, action: "payment", entity: "Invoice", entityId: invoiceId, detail: `$${amount.toFixed(2)} ${method}` } });
+  emitWebhook("payment.recorded", { invoiceId, invoiceNumber: inv.number, amount, method, reference, amountPaid: paid, total: Number(inv.total), customerId: inv.customerId, by: user.name });
+  if (paid >= Number(inv.total) - 0.005) emitWebhook("invoice.paid", { id: invoiceId, number: inv.number, total: Number(inv.total), customerId: inv.customerId, workOrderId: inv.workOrderId });
   revalidatePath(`/invoices/${invoiceId}`);
   revalidatePath("/invoices");
   revalidatePath("/payments");

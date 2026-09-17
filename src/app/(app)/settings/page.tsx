@@ -11,6 +11,7 @@ import { money } from "@/lib/format";
 import { addBay, addTemplateItem, createUser, deleteBay, deleteCannedService, deleteTemplateItem, moveTemplateItem, saveBranding, saveBusiness, saveModules, saveRates, toggleBay, updateUser } from "@/actions/settings";
 import { CannedServiceEditor } from "./canned-service-editor";
 import { IntegrationsTab } from "./integrations-tab";
+import { ApiTab } from "./api-tab";
 
 export const metadata = { title: "Settings" };
 
@@ -24,9 +25,10 @@ const TABS = [
   { key: "services", label: "Canned services" },
   { key: "users", label: "Users & roles" },
   { key: "integrations", label: "Integrations" },
+  { key: "api", label: "API & Webhooks" },
 ];
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string; ok?: string; error?: string; edit?: string; newKey?: string; newId?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string; ok?: string; error?: string; edit?: string; newKey?: string; newId?: string; newSecret?: string; newHook?: string }> }) {
   const me = await requireStaff(MANAGER_ROLES);
   const s = await getSettings();
   const sp = await searchParams;
@@ -126,6 +128,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {tab === "services" ? <ServicesTab edit={sp.edit} /> : null}
       {tab === "users" ? <UsersTab meId={me.id} meRole={me.role} /> : null}
       {tab === "integrations" ? <IntegrationsTab newKey={sp.newKey} newId={sp.newId} /> : null}
+      {tab === "api" ? <ApiTab newKey={sp.newKey} newId={sp.newId} newSecret={sp.newSecret} newHook={sp.newHook} /> : null}
     </div>
   );
 }

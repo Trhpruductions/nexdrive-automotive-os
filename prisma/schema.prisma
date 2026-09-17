@@ -683,3 +683,52 @@ model IngestLog {
 
   @@index([createdAt])
 }
+
+// ============================ Developer API & webhooks ============================
+
+// Keys issued under Settings -> API & Webhooks so other software can talk to the OS.
+model ApiKey {
+  id         String    @id @default(cuid())
+  name       String
+  keyHash    String    @unique
+  keyPrefix  String
+  scopes     String[]  @default(["read"])
+  enabled    Boolean   @default(true)
+  lastUsedAt DateTime?
+  useCount   Int       @default(0)
+  expiresAt  DateTime?
+  createdBy  String?
+  createdAt  DateTime  @default(now())
+}
+
+// Outbound notifications: NexDrive POSTs signed JSON to other systems when events happen.
+model WebhookEndpoint {
+  id              String    @id @default(cuid())
+  name            String
+  url             String
+  secret          String
+  events          String[]  @default([])
+  enabled         Boolean   @default(true)
+  lastStatus      Int?
+  lastDeliveredAt DateTime?
+  failures        Int       @default(0)
+  createdAt       DateTime  @default(now())
+
+  deliveries WebhookDelivery[]
+}
+
+model WebhookDelivery {
+  id         String   @id @default(cuid())
+  event      String
+  status     Int?
+  ok         Boolean
+  error      String?
+  durationMs Int?
+  payload    Json?
+  createdAt  DateTime @default(now())
+
+  endpoint   WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  endpointId String
+
+  @@index([endpointId, createdAt])
+}

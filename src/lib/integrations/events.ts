@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { bus } from "./bus";
+import { emitWebhook } from "@/lib/webhooks";
 import type { MachineStatus } from "@/generated/prisma/enums";
 
 /**
@@ -111,6 +112,7 @@ async function applyOne(ev: CanonicalEvent, ctx: { integrationId?: string; sourc
       const m = await ensureMachine(ev, ctx.integrationId);
       const changed = m.status !== ev.status;
       await db.machine.update({ where: { id: m.id }, data: { status: ev.status, ...(changed ? { lastStatusChangeAt: at } : {}) } });
+      if (changed) emitWebhook("machine.status_changed", { machineId: m.id, code: m.code, name: m.name, from: m.status, to: ev.status, message: ev.message ?? null, at });
       await db.machineEvent.create({ data: { machineId: m.id, type: "STATUS", status: ev.status, message: ev.message, occurredAt: at, raw: ev as object } });
       result.touchedMachines.push(m.code);
       return;
@@ -133,6 +135,7 @@ async function applyOne(ev: CanonicalEvent, ctx: { integrationId?: string; sourc
     case "machine.alarm": {
       const m = await ensureMachine(ev, ctx.integrationId);
       await db.machineEvent.create({ data: { machineId: m.id, type: "ALARM", code: ev.code, message: ev.message, occurredAt: at, raw: ev as object } });
+      emitWebhook("machine.alarm", { machineId: m.id, code: m.code, name: m.name, alarmCode: ev.code ?? null, message: ev.message, severity: ev.severity ?? "warning", at });
       if (ev.severity === "critical") await db.machine.update({ where: { id: m.id }, data: { status: "DOWN", lastStatusChangeAt: at } });
       result.touchedMachines.push(m.code);
       return;

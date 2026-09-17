@@ -9,6 +9,7 @@ import { requireStaff, BILLING_ROLES } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { computeTotals } from "@/lib/money";
 import { queueNotification } from "@/lib/notify";
+import { emitWebhook } from "@/lib/webhooks";
 import type { FormState } from "./customers";
 import type { WorkOrderStatus } from "@/generated/prisma/enums";
 
@@ -53,6 +54,7 @@ export async function createWorkOrder(_prev: FormState, formData: FormData): Pro
   if (d.mileageIn && d.mileageIn > vehicle.mileage) await db.vehicle.update({ where: { id: vehicle.id }, data: { mileage: d.mileageIn } });
   if (d.appointmentId) await db.appointment.update({ where: { id: d.appointmentId }, data: { workOrderId: wo.id, status: "CHECKED_IN" } }).catch(() => null);
   await db.auditLog.create({ data: { userId: user.id, action: "create", entity: "WorkOrder", entityId: wo.id, detail: `#${wo.number}` } });
+  emitWebhook("work_order.created", { ...wo, vehicle, createdBy: user.name });
   revalidatePath("/work-orders");
   redirect(`/work-orders/${wo.id}`);
 }
@@ -266,6 +268,7 @@ export async function setWorkOrderStatus(id: string, status: WorkOrderStatus) {
     await queueNotification({ customerId: wo.customerId, workOrderId: id, subject: "Waiting on parts", body: `We're waiting on parts for your ${wo.vehicle.year} ${wo.vehicle.make} ${wo.vehicle.model}. We'll update you as soon as they arrive.` });
   }
   await db.auditLog.create({ data: { userId: user.id, action: `status:${status}`, entity: "WorkOrder", entityId: id, detail: `#${wo.number}` } });
+  emitWebhook("work_order.status_changed", { id, number: wo.number, from: wo.status, to: status, vehicle: wo.vehicle, customer: { id: wo.customer.id, firstName: wo.customer.firstName, lastName: wo.customer.lastName }, by: user.name });
   revalidatePath(`/work-orders/${id}`);
   revalidatePath("/work-orders");
   revalidatePath("/dashboard");
@@ -290,6 +293,7 @@ export async function sendForApproval(id: string) {
     channels: ["EMAIL", "SMS", "PORTAL"],
   });
   await db.auditLog.create({ data: { userId: user.id, action: "send_for_approval", entity: "WorkOrder", entityId: id, detail: `#${wo.number}` } });
+  emitWebhook("work_order.sent_for_approval", { id, number: wo.number, total: totals.total, approvalUrl: link, vehicle: wo.vehicle, customer: { id: wo.customer.id, firstName: wo.customer.firstName, lastName: wo.customer.lastName, email: wo.customer.email } });
   revalidatePath(`/work-orders/${id}`);
   redirect(`/work-orders/${id}?ok=Estimate+sent+to+customer`);
 }
@@ -303,6 +307,7 @@ export async function respondToEstimate(token: string, formData: FormData) {
   if (decision === "decline") {
     await db.workOrder.update({ where: { id: wo.id }, data: { status: "ESTIMATE", declinedAt: new Date(), approvedBy: name || null } });
     await db.auditLog.create({ data: { action: "estimate_declined", entity: "WorkOrder", entityId: wo.id, detail: name } });
+    emitWebhook("work_order.declined", { id: wo.id, number: wo.number, by: name || null });
     redirect(`/approve/${token}?done=declined`);
   }
   if (!name) redirect(`/approve/${token}?error=Please+type+your+name+to+approve`);
@@ -314,6 +319,7 @@ export async function respondToEstimate(token: string, formData: FormData) {
   }
   await db.workOrder.update({ where: { id: wo.id }, data: { status: "APPROVED", approvedAt: new Date(), approvedBy: name, declinedAt: null } });
   await db.auditLog.create({ data: { action: "estimate_approved", entity: "WorkOrder", entityId: wo.id, detail: name } });
+  emitWebhook("work_order.approved", { id: wo.id, number: wo.number, by: name, approvedLineIds: approvedIds.size ? [...approvedIds] : wo.lines.map((l) => l.id) });
   redirect(`/approve/${token}?done=approved`);
 }
 
@@ -335,6 +341,7 @@ export async function portalApprove(workOrderId: string, formData: FormData) {
   }
   await db.workOrder.update({ where: { id: wo.id }, data: { status: "APPROVED", approvedAt: new Date(), approvedBy: `${user.name} (portal)`, declinedAt: null } });
   await db.auditLog.create({ data: { userId: user.id, action: "estimate_approved", entity: "WorkOrder", entityId: wo.id, detail: "portal" } });
+  emitWebhook("work_order.approved", { id: wo.id, number: wo.number, by: `${user.name} (portal)` });
   revalidatePath("/portal");
   redirect(`/portal/service/${wo.id}?ok=Estimate+approved`);
 }
@@ -376,6 +383,7 @@ export async function createInvoice(workOrderId: string) {
   });
   await queueNotification({ customerId: wo.customerId, workOrderId, subject: `Invoice ${String(invoice.number).padStart(5, "0")}`, body: `Your invoice for ${t.total.toLocaleString("en-US", { style: "currency", currency: "USD" })} is ready to view in your portal.` });
   await db.auditLog.create({ data: { userId: user.id, action: "invoice", entity: "Invoice", entityId: invoice.id, detail: `WO-${wo.number}` } });
+  emitWebhook("invoice.created", { ...invoice, workOrderNumber: wo.number, customer: { id: wo.customer.id, firstName: wo.customer.firstName, lastName: wo.customer.lastName, email: wo.customer.email } });
   revalidatePath(`/work-orders/${workOrderId}`);
   revalidatePath("/invoices");
   redirect(`/invoices/${invoice.id}?ok=Invoice+created`);

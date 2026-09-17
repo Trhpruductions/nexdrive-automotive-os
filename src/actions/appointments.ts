@@ -7,6 +7,7 @@ import { addMinutes, format } from "date-fns";
 import { db } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
 import { queueNotification } from "@/lib/notify";
+import { emitWebhook } from "@/lib/webhooks";
 import type { FormState } from "./customers";
 import type { AppointmentStatus } from "@/generated/prisma/enums";
 
@@ -63,6 +64,7 @@ export async function createAppointment(_prev: FormState, formData: FormData): P
     body: `Your ${appt.vehicle.year} ${appt.vehicle.make} ${appt.vehicle.model} is booked for ${format(start, "EEEE, MMM d 'at' h:mm a")} — ${d.serviceRequested}.`,
   });
   await db.auditLog.create({ data: { userId: user.id, action: "create", entity: "Appointment", entityId: appt.id } });
+  emitWebhook("appointment.created", appt);
   revalidatePath("/schedule");
   redirect(`/schedule?date=${format(start, "yyyy-MM-dd")}&ok=Appointment+booked`);
 }
@@ -91,6 +93,7 @@ export async function updateAppointment(id: string, _prev: FormState, formData: 
 export async function setAppointmentStatus(id: string, status: AppointmentStatus) {
   await requireStaff();
   const a = await db.appointment.update({ where: { id }, data: { status } });
+  emitWebhook("appointment.status_changed", { id: a.id, status, scheduledStart: a.scheduledStart, vehicleId: a.vehicleId, customerId: a.customerId });
   if (status === "CONFIRMED") {
     const v = await db.vehicle.findUnique({ where: { id: a.vehicleId } });
     await queueNotification({ customerId: a.customerId, subject: "Appointment confirmed", body: `See you ${format(a.scheduledStart, "EEEE, MMM d 'at' h:mm a")} for your ${v?.year} ${v?.make} ${v?.model}.` });

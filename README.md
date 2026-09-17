@@ -102,6 +102,26 @@ curl -X POST http://127.0.0.1:4500/api/ingest -H "Authorization: Bearer nd_demo_
 
 The **Production** page updates live (SSE) as events arrive. **Parts → Scan** works with any USB/Bluetooth barcode scanner for receiving and pulling stock.
 
+## Developer API & webhooks (connect other software)
+
+Settings → **API & Webhooks** issues keys for other systems (accounting, parts suppliers, CRMs, kiosks, Zapier…). Keys carry scopes — `read`, `write`, `ingest` — and are sent as `Authorization: Bearer nd_live_…`. `GET /api/v1` returns the endpoint index as JSON.
+
+| Endpoint | What it does |
+| --- | --- |
+| `GET /api/v1/me` | key info + shop settings |
+| `GET/POST /api/v1/customers`, `GET/PATCH /api/v1/customers/{id}` | customers (search with `?q=`) |
+| `GET/POST /api/v1/vehicles`, `GET/PATCH /api/v1/vehicles/{id}` | vehicles + service history |
+| `GET/POST /api/v1/work-orders`, `GET/PATCH /api/v1/work-orders/{id}` | estimates/work orders with lines and totals; guarded status transitions |
+| `GET/POST /api/v1/appointments` | schedule |
+| `GET /api/v1/invoices`, `GET /api/v1/invoices/{id}` | invoices with balances and payments |
+| `GET/POST /api/v1/parts`, `GET/PATCH /api/v1/parts/{id or SKU}` | inventory; `{ "adjust": -2, "reason": "…" }` moves stock |
+| `GET /api/v1/machines`, `GET /api/v1/production` | live production floor |
+| `POST /api/v1/events` | push machine / inventory events (ingest scope) |
+
+Lists paginate with `?page=&limit=` (max 200) and return `{ data, page, limit, total, pages }`. Errors are `{ error: { code, message } }` with 401/403/404/409/422 as appropriate.
+
+**Outbound webhooks** notify other software when things happen: `customer.created`, `vehicle.created`, `work_order.created / status_changed / sent_for_approval / approved / declined`, `invoice.created / paid`, `payment.recorded`, `appointment.created / status_changed`, `part.low_stock`, `machine.status_changed / alarm`. Each delivery is a JSON envelope `{ id, event, at, data }` signed with `X-NexDrive-Signature: sha256=HMAC_SHA256(secret, body)`; failures retry twice and every delivery is logged in Settings.
+
 ## Scripts
 
 ```bash

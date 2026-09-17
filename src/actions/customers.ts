@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { hashPassword, requireStaff } from "@/lib/auth";
+import { emitWebhook } from "@/lib/webhooks";
 
 const CustomerSchema = z.object({
   firstName: z.string().trim().min(1, "First name is required"),
@@ -35,6 +36,7 @@ export async function createCustomer(_prev: FormState, formData: FormData): Prom
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
   const customer = await db.customer.create({ data: parsed.data });
   await db.auditLog.create({ data: { userId: user.id, action: "create", entity: "Customer", entityId: customer.id, detail: `${customer.firstName} ${customer.lastName}` } });
+  emitWebhook("customer.created", customer);
   revalidatePath("/customers");
   const returnTo = formData.get("returnTo");
   redirect(typeof returnTo === "string" && returnTo.startsWith("/") ? `${returnTo}${returnTo.includes("?") ? "&" : "?"}customerId=${customer.id}` : `/customers/${customer.id}`);
