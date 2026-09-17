@@ -1,0 +1,685 @@
+// NexDrive Automotive OS — data model
+// Postgres 13 (local). Money is stored as Decimal(12,2); hours as Decimal(6,2).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================ Auth & staff ============================
+
+enum Role {
+  OWNER
+  ADMIN
+  SERVICE_ADVISOR
+  TECHNICIAN
+  CUSTOMER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(TECHNICIAN)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  customer   Customer?   @relation(fields: [customerId], references: [id])
+  customerId String?     @unique
+  technician Technician?
+  auditLogs  AuditLog[]
+  aiMessages AiMessage[]
+}
+
+model Technician {
+  id         String   @id @default(cuid())
+  name       String
+  email      String?
+  phone      String?
+  specialty  String?
+  hourlyRate Decimal  @default(0) @db.Decimal(10, 2)
+  color      String   @default("#3b82f6")
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  user         User?         @relation(fields: [userId], references: [id])
+  userId       String?       @unique
+  workOrders   WorkOrder[]
+  appointments Appointment[]
+  inspections  Inspection[]
+  timeEntries  TimeEntry[]
+}
+
+model Bay {
+  id           String        @id @default(cuid())
+  name         String        @unique
+  active       Boolean       @default(true)
+  workOrders   WorkOrder[]
+  appointments Appointment[]
+}
+
+// ============================ Customers & vehicles ============================
+
+model Customer {
+  id        String   @id @default(cuid())
+  firstName String
+  lastName  String
+  company   String?
+  email     String?
+  phone     String?
+  address   String?
+  city      String?
+  state     String?
+  zip       String?
+  notes     String?
+  taxExempt Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  portalUser    User?
+  vehicles      Vehicle[]
+  workOrders    WorkOrder[]
+  appointments  Appointment[]
+  invoices      Invoice[]
+  notifications Notification[]
+  messages      Message[]
+
+  @@index([lastName, firstName])
+}
+
+model Vehicle {
+  id           String   @id @default(cuid())
+  vin          String?  @unique
+  year         Int
+  make         String
+  model        String
+  trim         String?
+  color        String?
+  licensePlate String?
+  plateState   String?
+  mileage      Int      @default(0)
+  engine       String?
+  transmission String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  customer     Customer              @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId   String
+  workOrders   WorkOrder[]
+  appointments Appointment[]
+  photos       VehiclePhoto[]
+  inspections  Inspection[]
+  reminders    MaintenanceReminder[]
+
+  @@index([customerId])
+  @@index([licensePlate])
+}
+
+enum PhotoKind {
+  GENERAL
+  DAMAGE
+  INSPECTION
+  BEFORE
+  AFTER
+}
+
+model VehiclePhoto {
+  id        String    @id @default(cuid())
+  url       String
+  caption   String?
+  kind      PhotoKind @default(GENERAL)
+  createdAt DateTime  @default(now())
+
+  vehicle     Vehicle    @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId   String
+  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  workOrderId String?
+}
+
+model MaintenanceReminder {
+  id           String    @id @default(cuid())
+  service      String
+  dueAtMileage Int?
+  dueAtDate    DateTime?
+  completed    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId String
+}
+
+// ============================ Scheduling ============================
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  CHECKED_IN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+model Appointment {
+  id               String            @id @default(cuid())
+  scheduledStart   DateTime
+  scheduledEnd     DateTime
+  status           AppointmentStatus @default(SCHEDULED)
+  serviceRequested String
+  notes            String?
+  dropOff          Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  customer     Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId   String
+  vehicle      Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId    String
+  technician   Technician? @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  technicianId String?
+  bay          Bay?        @relation(fields: [bayId], references: [id], onDelete: SetNull)
+  bayId        String?
+  workOrder    WorkOrder?  @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  workOrderId  String?     @unique
+
+  @@index([scheduledStart])
+}
+
+// ============================ Work orders ============================
+
+enum WorkOrderStatus {
+  ESTIMATE
+  AWAITING_APPROVAL
+  APPROVED
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  INVOICED
+  CANCELLED
+}
+
+model WorkOrder {
+  id                String          @id @default(cuid())
+  number            Int             @unique @default(autoincrement())
+  status            WorkOrderStatus @default(ESTIMATE)
+  complaint         String
+  diagnosis         String?
+  technicianNotes   String?
+  internalNotes     String?
+  mileageIn         Int?
+  mileageOut        Int?
+  promisedAt        DateTime?
+  approvalToken     String?         @unique
+  sentForApprovalAt DateTime?
+  approvedAt        DateTime?
+  approvedBy        String?
+  declinedAt        DateTime?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  customer      Customer        @relation(fields: [customerId], references: [id])
+  customerId    String
+  vehicle       Vehicle         @relation(fields: [vehicleId], references: [id])
+  vehicleId     String
+  technician    Technician?     @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  technicianId  String?
+  bay           Bay?            @relation(fields: [bayId], references: [id], onDelete: SetNull)
+  bayId         String?
+  lines         WorkOrderLine[]
+  photos        VehiclePhoto[]
+  inspection    Inspection?
+  invoice       Invoice?
+  appointment   Appointment?
+  timeEntries   TimeEntry[]
+  notifications Notification[]
+  messages      Message[]
+
+  @@index([status])
+  @@index([customerId])
+  @@index([vehicleId])
+}
+
+enum LineKind {
+  LABOR
+  PART
+  FEE
+  DISCOUNT
+}
+
+model WorkOrderLine {
+  id          String   @id @default(cuid())
+  kind        LineKind
+  description String
+  quantity    Decimal  @default(1) @db.Decimal(10, 2)
+  unitPrice   Decimal  @default(0) @db.Decimal(12, 2)
+  hours       Decimal? @db.Decimal(6, 2)
+  taxable     Boolean  @default(true)
+  approved    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  workOrderId String
+  part        Part?     @relation(fields: [partId], references: [id], onDelete: SetNull)
+  partId      String?
+
+  @@index([workOrderId])
+}
+
+model TimeEntry {
+  id        String    @id @default(cuid())
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  note      String?
+
+  workOrder    WorkOrder  @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  workOrderId  String
+  technician   Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  technicianId String
+}
+
+// ============================ Inspections ============================
+
+enum InspectionResult {
+  GOOD
+  ATTENTION
+  URGENT
+  NA
+}
+
+model Inspection {
+  id        String   @id @default(cuid())
+  summary   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workOrder    WorkOrder        @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  workOrderId  String           @unique
+  vehicle      Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId    String
+  technician   Technician?      @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  technicianId String?
+  items        InspectionItem[]
+}
+
+model InspectionItem {
+  id        String           @id @default(cuid())
+  category  String
+  name      String
+  result    InspectionResult @default(NA)
+  notes     String?
+  sortOrder Int              @default(0)
+
+  inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  inspectionId String
+}
+
+// ============================ Parts & suppliers ============================
+
+model Supplier {
+  id      String  @id @default(cuid())
+  name    String  @unique
+  phone   String?
+  email   String?
+  website String?
+  parts   Part[]
+}
+
+model Part {
+  id             String   @id @default(cuid())
+  sku            String   @unique
+  name           String
+  description    String?
+  category       String?
+  brand          String?
+  location       String?
+  quantityOnHand Int      @default(0)
+  reorderPoint   Int      @default(0)
+  cost           Decimal  @default(0) @db.Decimal(12, 2)
+  price          Decimal  @default(0) @db.Decimal(12, 2)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  supplier   Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  supplierId String?
+  lines      WorkOrderLine[]
+  movements  StockMovement[]
+  cannedUses CannedServicePart[]
+
+  @@index([category])
+}
+
+model StockMovement {
+  id        String   @id @default(cuid())
+  delta     Int
+  reason    String
+  reference String?
+  createdAt DateTime @default(now())
+
+  part   Part   @relation(fields: [partId], references: [id], onDelete: Cascade)
+  partId String
+}
+
+// ============================ Billing ============================
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIAL
+  PAID
+  VOID
+}
+
+model Invoice {
+  id         String        @id @default(cuid())
+  number     Int           @unique @default(autoincrement())
+  status     InvoiceStatus @default(DRAFT)
+  issuedAt   DateTime      @default(now())
+  dueAt      DateTime?
+  subtotal   Decimal       @default(0) @db.Decimal(12, 2)
+  discount   Decimal       @default(0) @db.Decimal(12, 2)
+  taxRate    Decimal       @default(0) @db.Decimal(6, 4)
+  tax        Decimal       @default(0) @db.Decimal(12, 2)
+  total      Decimal       @default(0) @db.Decimal(12, 2)
+  amountPaid Decimal       @default(0) @db.Decimal(12, 2)
+  notes      String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
+  workOrderId String    @unique
+  customer    Customer  @relation(fields: [customerId], references: [id])
+  customerId  String
+  payments    Payment[]
+
+  @@index([status])
+  @@index([issuedAt])
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  CHECK
+  ACH
+  OTHER
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  amount    Decimal       @db.Decimal(12, 2)
+  method    PaymentMethod @default(CARD)
+  reference String?
+  paidAt    DateTime      @default(now())
+
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceId String
+}
+
+// ============================ Notifications & settings ============================
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  PORTAL
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+model Notification {
+  id        String              @id @default(cuid())
+  channel   NotificationChannel @default(PORTAL)
+  subject   String
+  body      String
+  status    NotificationStatus  @default(QUEUED)
+  readAt    DateTime?
+  sentAt    DateTime?
+  createdAt DateTime            @default(now())
+
+  customer    Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId  String
+  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  workOrderId String?
+
+  @@index([customerId, createdAt])
+}
+
+model ShopSettings {
+  id            Int     @id @default(1)
+  name          String  @default("Plex Roswell Automotive")
+  tagline       String  @default("Automotive Service Center")
+  phone         String?
+  email         String?
+  address       String?
+  city          String?
+  state         String?
+  zip           String?
+  taxRate       Decimal @default(0.0700) @db.Decimal(6, 4)
+  laborRate     Decimal @default(125.00) @db.Decimal(10, 2)
+  shopFeeRate   Decimal @default(0.0000) @db.Decimal(6, 4)
+  openTime      String  @default("08:00")
+  closeTime     String  @default("18:00")
+  invoiceFooter String?
+
+  // Branding / tailoring
+  logoUrl         String?
+  accentColor     String   @default("#2f7cf6")
+  website         String?
+  currency        String   @default("USD")
+  timezone        String   @default("America/New_York")
+  modules         String[] @default(["vehicles", "customers", "workOrders", "schedule", "estimates", "invoices", "parts", "technicians", "inspections", "reports", "payments", "ai", "production", "messages", "notifications"])
+  approvalMessage String?
+  portalWelcome   String?
+}
+
+// Shop-defined inspection checklist (used to build every new inspection)
+model InspectionTemplateItem {
+  id        String  @id @default(cuid())
+  category  String
+  name      String
+  sortOrder Int     @default(0)
+  active    Boolean @default(true)
+}
+
+// Canned jobs: "Brake job", "Oil change" — one click adds labor + parts to a work order
+model CannedService {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  laborHours  Decimal  @default(1) @db.Decimal(6, 2)
+  laborRate   Decimal? @db.Decimal(10, 2)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  parts CannedServicePart[]
+}
+
+model CannedServicePart {
+  id       String  @id @default(cuid())
+  quantity Decimal @default(1) @db.Decimal(10, 2)
+
+  cannedService   CannedService @relation(fields: [cannedServiceId], references: [id], onDelete: Cascade)
+  cannedServiceId String
+  part            Part          @relation(fields: [partId], references: [id], onDelete: Cascade)
+  partId          String
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+// Two-way shop <-> customer messaging (customer side lives in the portal)
+model Message {
+  id         String           @id @default(cuid())
+  direction  MessageDirection
+  body       String
+  authorName String?
+  readAt     DateTime?
+  createdAt  DateTime         @default(now())
+
+  customer    Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId  String
+  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  workOrderId String?
+
+  @@index([customerId, createdAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  entity    String
+  entityId  String?
+  detail    String?
+  createdAt DateTime @default(now())
+
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId String?
+
+  @@index([createdAt])
+}
+
+// ============================ NexDrive AI ============================
+
+enum AiRole {
+  user
+  assistant
+}
+
+model AiMessage {
+  id        String   @id @default(cuid())
+  role      AiRole
+  content   String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  @@index([userId, createdAt])
+}
+
+// ============================ Integrations & production floor ============================
+
+enum IntegrationType {
+  WEBHOOK // machines / systems push JSON to /api/ingest with an API key
+  MQTT // subscribe to a broker (PLC gateways, IoT sensors, SCADA bridges)
+  REST_POLL // poll a JSON endpoint on an interval (MES, ERP, supplier stock APIs)
+  CSV_FEED // poll a CSV URL on an interval (supplier price / stock files)
+}
+
+model Integration {
+  id         String          @id @default(cuid())
+  name       String
+  type       IntegrationType
+  enabled    Boolean         @default(true)
+  keyHash    String?         @unique
+  keyPrefix  String?
+  config     Json            @default("{}")
+  lastSeenAt DateTime?
+  lastError  String?
+  eventCount Int             @default(0)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  machines Machine[]
+  logs     IngestLog[]
+}
+
+model ProductionLine {
+  id            String    @id @default(cuid())
+  name          String    @unique
+  description   String?
+  targetPerHour Int?
+  active        Boolean   @default(true)
+  sortOrder     Int       @default(0)
+  machines      Machine[]
+}
+
+enum MachineStatus {
+  RUNNING
+  IDLE
+  DOWN
+  MAINTENANCE
+  OFFLINE
+}
+
+model Machine {
+  id                 String        @id @default(cuid())
+  code               String        @unique
+  name               String
+  type               String?
+  status             MachineStatus @default(OFFLINE)
+  lastHeartbeatAt    DateTime?
+  lastStatusChangeAt DateTime?
+  metrics            Json          @default("{}")
+  active             Boolean       @default(true)
+  notes              String?
+  createdAt          DateTime      @default(now())
+
+  integration   Integration?    @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+  integrationId String?
+  line          ProductionLine? @relation(fields: [lineId], references: [id], onDelete: SetNull)
+  lineId        String?
+  events        MachineEvent[]
+
+  @@index([lineId])
+}
+
+enum MachineEventType {
+  STATUS
+  COUNT
+  READING
+  ALARM
+}
+
+model MachineEvent {
+  id         String           @id @default(cuid())
+  type       MachineEventType
+  status     MachineStatus?
+  count      Int?
+  good       Int?
+  scrap      Int?
+  metric     String?
+  value      Float?
+  unit       String?
+  code       String?
+  message    String?
+  raw        Json?
+  occurredAt DateTime         @default(now())
+  receivedAt DateTime         @default(now())
+
+  machine   Machine @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  machineId String
+
+  @@index([machineId, occurredAt])
+  @@index([occurredAt])
+}
+
+model IngestLog {
+  id        String   @id @default(cuid())
+  source    String
+  ok        Boolean
+  summary   String
+  error     String?
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  integration   Integration? @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  integrationId String?
+
+  @@index([createdAt])
+}
