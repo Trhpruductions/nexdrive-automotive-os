@@ -1,0 +1,9 @@
+{
+  "name": "nexdrive-tools",
+  "private": true,
+  "description": "Prisma CLI for running migrations inside the production container",
+  "dependencies": {
+    "prisma": "7.10.0",
+    "dotenv": "^17.2.3"
+  }
+}

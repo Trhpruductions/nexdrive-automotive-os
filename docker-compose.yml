@@ -1,0 +1,71 @@
+# NexDrive Automotive OS — one-command production stack
+#
+#   cp .env.example .env         # then edit: APP_URL, AUTH_SECRET, POSTGRES_PASSWORD, provider keys
+#   docker compose up -d --build
+#
+# Services:
+#   db     PostgreSQL 16 (data in the `pgdata` volume)
+#   app    NexDrive (migrations run automatically on start; uploads in the `uploads` volume)
+#   caddy  HTTPS reverse proxy with automatic Let's Encrypt certificates (set DOMAIN in .env)
+#
+# Without a domain yet? Comment out `caddy` and publish the app port directly:
+#   app: ports: ["4500:3000"]
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nexdrive
+      POSTGRES_USER: nexdrive
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexdrive -d nexdrive"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    image: nexdrive-automotive-os:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://nexdrive:${POSTGRES_PASSWORD}@db:5432/nexdrive?schema=public
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
+      APP_URL: ${APP_URL:-https://${DOMAIN:-localhost}}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM: ${TWILIO_FROM:-}
+    volumes:
+      - uploads:/app/var/uploads
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:
+  caddy_config:

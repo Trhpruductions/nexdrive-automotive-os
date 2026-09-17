@@ -1,0 +1,18 @@
+# Automatic HTTPS for NexDrive. DOMAIN comes from .env (e.g. app.nexdrive.example).
+# For a local test without a real domain, set DOMAIN=localhost (Caddy issues a self-signed cert).
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:3000 {
+		# Server-Sent Events (production floor) must not be buffered
+		flush_interval -1
+	}
+	request_body {
+		max_size 25MB
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		X-Frame-Options SAMEORIGIN
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+}

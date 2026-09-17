@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+var/uploads/*
+!var/uploads/.gitkeep
+design
+*.md
+.env*
+!.env.example
+.claude
