@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef, useState } from "react";
 import Link from "next/link";
-import { Save } from "lucide-react";
+import { Save, ScanSearch } from "lucide-react";
 import { createVehicle, updateVehicle } from "@/actions/vehicles";
 import type { FormState } from "@/actions/customers";
 import { Field } from "@/components/ui";
@@ -39,9 +39,36 @@ export function VehicleForm({
   const action = values.id ? updateVehicle.bind(null, values.id) : createVehicle;
   const [state, formAction, pending] = useActionState<FormState, FormData>(action, undefined);
   const year = new Date().getFullYear() + 1;
+  const formRef = useRef<HTMLFormElement>(null);
+  const [decoding, setDecoding] = useState(false);
+  const [decodeMsg, setDecodeMsg] = useState<string | null>(null);
+
+  async function decodeVin() {
+    const form = formRef.current;
+    if (!form) return;
+    const vin = (form.elements.namedItem("vin") as HTMLInputElement).value.trim();
+    if (vin.length < 11) return setDecodeMsg("Enter the 17-character VIN first");
+    setDecoding(true);
+    setDecodeMsg(null);
+    try {
+      const res = await fetch(`/api/vin/${encodeURIComponent(vin)}`);
+      const d = await res.json();
+      if (!res.ok) return setDecodeMsg(d.error ?? "Could not decode");
+      const set = (name: string, v: string | number | null) => {
+        const el = form.elements.namedItem(name) as HTMLInputElement | null;
+        if (el && v) el.value = String(v);
+      };
+      set("year", d.year); set("make", d.make); set("model", d.model); set("trim", d.trim); set("engine", d.engine); set("transmission", d.transmission);
+      setDecodeMsg(`Decoded: ${[d.year, d.make, d.model, d.trim].filter(Boolean).join(" ")}${d.bodyClass ? ` · ${d.bodyClass}` : ""}${d.driveType ? ` · ${d.driveType}` : ""}`);
+    } catch {
+      setDecodeMsg("Decode service unavailable");
+    } finally {
+      setDecoding(false);
+    }
+  }
 
   return (
-    <form action={formAction} className="card p-5 sm:p-6 space-y-5 max-w-3xl">
+    <form ref={formRef} action={formAction} className="card p-5 sm:p-6 space-y-5 max-w-3xl">
       {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
       <div className="grid sm:grid-cols-2 gap-4">
         <Field label="Owner" className="sm:col-span-2">
@@ -62,7 +89,12 @@ export function VehicleForm({
         </div>
         <Field label="Trim"><input name="trim" defaultValue={values.trim ?? ""} className="input" placeholder="Lariat" /></Field>
         <Field label="Color"><input name="color" defaultValue={values.color ?? ""} className="input" /></Field>
-        <Field label="VIN" hint="17 characters"><input name="vin" maxLength={17} defaultValue={values.vin ?? ""} className="input font-mono uppercase" /></Field>
+        <Field label="VIN" hint={decodeMsg ?? "17 characters — decode fills year, make, model, trim, engine"}>
+          <div className="flex gap-2">
+            <input name="vin" maxLength={17} defaultValue={values.vin ?? ""} className="input font-mono uppercase" />
+            <button type="button" onClick={decodeVin} disabled={decoding} className="btn btn-secondary shrink-0"><ScanSearch size={15} /> {decoding ? "Decoding…" : "Decode"}</button>
+          </div>
+        </Field>
         <div className="grid grid-cols-[1fr_90px] gap-3">
           <Field label="License plate"><input name="licensePlate" defaultValue={values.licensePlate ?? ""} className="input uppercase" /></Field>
           <Field label="State">

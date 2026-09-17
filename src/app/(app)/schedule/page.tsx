@@ -5,7 +5,7 @@ import { requireStaff } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
 import { Avatar, Badge, Card, Flash, PageHeader } from "@/components/ui";
-import { BayTimeline } from "@/components/app/bay-timeline";
+import { DayBoard } from "@/components/app/day-board";
 import { APPT_STATUS } from "@/lib/constants";
 import { fmtTime, vehicleName } from "@/lib/format";
 
@@ -28,7 +28,16 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const d = (x: Date) => format(x, "yyyy-MM-dd");
   const prev = view === "week" ? subWeeks(date, 1) : subDays(date, 1);
   const next = view === "week" ? addWeeks(date, 1) : addDays(date, 1);
-  const dayAppts = appointments.filter((a) => !["CANCELLED", "NO_SHOW"].includes(a.status));
+  // plain objects only across the client boundary (Decimal fields on technician are not serialisable)
+  const dayAppts = appointments
+    .filter((a) => !["CANCELLED", "NO_SHOW"].includes(a.status))
+    .map((a) => ({
+      id: a.id, scheduledStart: a.scheduledStart, scheduledEnd: a.scheduledEnd, status: a.status, serviceRequested: a.serviceRequested,
+      bay: a.bay ? { id: a.bay.id, name: a.bay.name } : null,
+      vehicle: { year: a.vehicle.year, make: a.vehicle.make, model: a.vehicle.model, trim: a.vehicle.trim },
+      customer: { firstName: a.customer.firstName, lastName: a.customer.lastName },
+      technician: a.technician ? { name: a.technician.name, color: a.technician.color } : null,
+    }));
 
   return (
     <div>
@@ -55,7 +64,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       {view === "day" ? (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
           <Card className="xl:col-span-2" title="Bays">
-            <BayTimeline appointments={dayAppts} bays={bays} open={settings.openTime} close={settings.closeTime} />
+            <DayBoard appointments={dayAppts} bays={bays.map((b) => ({ id: b.id, name: b.name }))} open={settings.openTime} close={settings.closeTime} dateKey={d(date)} />
             <div className="flex flex-wrap gap-3 mt-3 text-[11px] text-muted">
               {(["SCHEDULED", "CONFIRMED", "CHECKED_IN", "IN_PROGRESS", "COMPLETED"] as const).map((s) => (
                 <span key={s} className="flex items-center gap-1.5"><span className={`h-2.5 w-2.5 rounded-sm ${s === "SCHEDULED" ? "bg-slate-500" : s === "CONFIRMED" ? "bg-accent/80" : s === "CHECKED_IN" ? "bg-violet-600" : s === "IN_PROGRESS" ? "bg-accent" : "bg-emerald-700"}`} />{APPT_STATUS[s].label}</span>

@@ -34,9 +34,9 @@ export function withPlatform<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 // Models that carry shopId directly.
-const DIRECT = new Set(["User", "Technician", "Bay", "Customer", "Vehicle", "Appointment", "WorkOrder", "Inspection", "Supplier", "Part", "Invoice", "Notification", "Message", "CannedService", "InspectionTemplateItem", "AuditLog", "Integration", "ProductionLine", "Machine", "IngestLog", "ApiKey", "WebhookEndpoint", "ShopSettings"]);
+const DIRECT = new Set(["User", "Technician", "Bay", "Customer", "Vehicle", "Appointment", "WorkOrder", "Inspection", "Supplier", "Part", "Invoice", "Notification", "Message", "CannedService", "InspectionTemplateItem", "AuditLog", "Integration", "ProductionLine", "Machine", "IngestLog", "ApiKey", "WebhookEndpoint", "ShopSettings", "PurchaseOrder"]);
 // Child models scoped through their parent relation.
-const VIA: Record<string, string> = { WorkOrderLine: "workOrder", TimeEntry: "workOrder", InspectionItem: "inspection", VehiclePhoto: "vehicle", MaintenanceReminder: "vehicle", StockMovement: "part", Payment: "invoice", CannedServicePart: "cannedService", MachineEvent: "machine", WebhookDelivery: "endpoint", AiMessage: "user" };
+const VIA: Record<string, string> = { WorkOrderLine: "workOrder", TimeEntry: "workOrder", InspectionItem: "inspection", VehiclePhoto: "vehicle", MaintenanceReminder: "vehicle", StockMovement: "part", Payment: "invoice", CannedServicePart: "cannedService", MachineEvent: "machine", WebhookDelivery: "endpoint", AiMessage: "user", PurchaseOrderLine: "purchaseOrder" };
 
 const LIST_OPS = new Set(["findFirst", "findFirstOrThrow", "findMany", "count", "aggregate", "groupBy", "updateMany", "updateManyAndReturn", "deleteMany"]);
 // WhereUniqueInput must keep the unique field at the top level, so the filter is merged flat.
@@ -123,8 +123,9 @@ export async function currentShopIdOrNull(): Promise<string | null> {
 }
 
 /** Per-shop sequence numbers for work orders and invoices (atomic increment). */
-export async function nextNumber(kind: "wo" | "inv", shopId?: string): Promise<number> {
+export async function nextNumber(kind: "wo" | "inv" | "po", shopId?: string): Promise<number> {
   const id = shopId ?? (await currentShopId());
-  const row = await rawDb.shop.update({ where: { id }, data: kind === "wo" ? { woSeq: { increment: 1 } } : { invSeq: { increment: 1 } }, select: { woSeq: true, invSeq: true } });
-  return kind === "wo" ? row.woSeq : row.invSeq;
+  const data = kind === "wo" ? { woSeq: { increment: 1 } } : kind === "inv" ? { invSeq: { increment: 1 } } : { poSeq: { increment: 1 } };
+  const row = await rawDb.shop.update({ where: { id }, data, select: { woSeq: true, invSeq: true, poSeq: true } });
+  return kind === "wo" ? row.woSeq : kind === "inv" ? row.invSeq : row.poSeq;
 }

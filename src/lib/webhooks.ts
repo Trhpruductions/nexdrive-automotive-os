@@ -24,6 +24,7 @@ export const WEBHOOK_EVENTS = [
   "payment.recorded",
   "appointment.created",
   "appointment.status_changed",
+  "appointment.rescheduled",
   "inspection.completed",
   "part.low_stock",
   "machine.status_changed",

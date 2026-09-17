@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { eachDayOfInterval, eachMonthOfInterval, endOfMonth, format, startOfDay, startOfMonth, subDays, subMonths } from "date-fns";
+import { differenceInDays, eachDayOfInterval, eachMonthOfInterval, endOfMonth, format, startOfDay, startOfMonth, subDays, subMonths } from "date-fns";
 import { CircleDollarSign, Percent, Receipt, Users } from "lucide-react";
 import { requireStaff, MANAGER_ROLES } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -17,7 +17,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const since = subDays(startOfDay(now), days - 1);
   const prevSince = subDays(since, days);
 
-  const [payments, prevPayments, invoices, lines, custCount, newCustomers, techs, byStatus, months] = await Promise.all([
+  const [payments, prevPayments, invoices, lines, custCount, newCustomers, techs, byStatus, months, openInvoices, taxRows, returningRows, partLines] = await Promise.all([
     db.payment.findMany({ where: { paidAt: { gte: since } }, select: { amount: true, paidAt: true, method: true } }),
     db.payment.aggregate({ _sum: { amount: true }, where: { paidAt: { gte: prevSince, lt: since } } }),
     db.invoice.findMany({ where: { issuedAt: { gte: since }, status: { not: "VOID" } }, select: { total: true, tax: true, workOrder: { select: { technicianId: true, customerId: true } } } }),
@@ -27,6 +27,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     db.technician.findMany({ where: { active: true } }),
     db.workOrder.groupBy({ by: ["status"], _count: { _all: true } }),
     db.payment.findMany({ where: { paidAt: { gte: startOfMonth(subMonths(now, 11)) } }, select: { amount: true, paidAt: true } }),
+    db.invoice.findMany({ where: { status: { in: ["SENT", "PARTIAL"] } }, include: { customer: { select: { id: true, firstName: true, lastName: true } } } }),
+    db.invoice.findMany({ where: { status: { not: "VOID" }, issuedAt: { gte: startOfMonth(subMonths(now, 5)) } }, select: { issuedAt: true, tax: true, subtotal: true, total: true } }),
+    db.invoice.findMany({ where: { issuedAt: { lt: since }, status: { not: "VOID" } }, select: { customerId: true }, distinct: ["customerId"] }),
+    db.workOrderLine.findMany({ where: { kind: "PART", approved: true, workOrder: { status: "INVOICED", invoice: { issuedAt: { gte: since }, status: { not: "VOID" } } } }, select: { quantity: true, unitPrice: true, part: { select: { category: true, cost: true } } } }),
   ]);
 
   const revenue = payments.reduce((s, p) => s + Number(p.amount), 0);
@@ -58,6 +62,46 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     .sort((a, b) => b.rev - a.rev);
   const topRev = techRows[0]?.rev || 1;
   const repeat = invoices.length ? new Set(invoices.map((i) => i.workOrder.customerId)).size : 0;
+
+  // AR aging on open invoices
+  const buckets = [
+    { label: "Current (0-30)", min: 0, max: 30, amount: 0, count: 0 },
+    { label: "31-60 days", min: 31, max: 60, amount: 0, count: 0 },
+    { label: "61-90 days", min: 61, max: 90, amount: 0, count: 0 },
+    { label: "Over 90 days", min: 91, max: Infinity, amount: 0, count: 0 },
+  ];
+  for (const i of openInvoices) {
+    const age = differenceInDays(now, i.issuedAt);
+    const b = buckets.find((x) => age >= x.min && age <= x.max) ?? buckets[3];
+    b.amount += Number(i.total) - Number(i.amountPaid);
+    b.count++;
+  }
+  const arTotal = buckets.reduce((s, b) => s + b.amount, 0);
+  const oldest = [...openInvoices].sort((a, b) => a.issuedAt.getTime() - b.issuedAt.getTime()).slice(0, 5);
+
+  // sales tax by month (last 6 months)
+  const taxByMonth = eachMonthOfInterval({ start: startOfMonth(subMonths(now, 5)), end: now }).map((m) => {
+    const rows = taxRows.filter((r) => r.issuedAt >= m && r.issuedAt <= endOfMonth(m));
+    return { label: format(m, "MMM yyyy"), taxable: rows.reduce((s, r) => s + Number(r.subtotal), 0), tax: rows.reduce((s, r) => s + Number(r.tax), 0), invoices: rows.length };
+  });
+
+  // parts sales by category
+  const byCategory = new Map<string, { revenue: number; cost: number; units: number }>();
+  for (const l of partLines) {
+    const cat = l.part?.category ?? "Uncategorised";
+    const cur = byCategory.get(cat) ?? { revenue: 0, cost: 0, units: 0 };
+    cur.revenue += Number(l.quantity) * Number(l.unitPrice);
+    cur.cost += Number(l.quantity) * Number(l.part?.cost ?? 0);
+    cur.units += Number(l.quantity);
+    byCategory.set(cat, cur);
+  }
+  const categories = [...byCategory.entries()].sort((a, b) => b[1].revenue - a[1].revenue);
+
+  // retention: customers invoiced in range who had an invoice before the range vs. first-timers
+  const invoicedCustomers = new Set(invoices.map((i) => i.workOrder.customerId));
+  const priorCustomers = new Set(returningRows.map((r) => r.customerId));
+  const returning = [...invoicedCustomers].filter((c) => priorCustomers.has(c)).length;
+  const brandNew = invoicedCustomers.size - returning;
 
   return (
     <div>
@@ -108,6 +152,46 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               {byStatus.map((s) => <li key={s.status} className="flex justify-between"><span>{s.status.replace("_", " ").toLowerCase()}</span><span className="tabular-nums">{s._count._all}</span></li>)}
             </ul>
           </div>
+        </Card>
+        <Card className="xl:col-span-2" title="Accounts receivable aging" action={<span className="text-xs text-muted">{money(arTotal)} outstanding</span>}>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+            {buckets.map((b, i) => (
+              <div key={b.label} className="rounded-lg bg-bg-elevated border border-border p-3">
+                <div className={`text-lg font-semibold tabular-nums ${i >= 2 && b.amount ? "text-red-400" : i === 1 && b.amount ? "text-amber-400" : ""}`}>{money(b.amount)}</div>
+                <div className="text-[11px] text-muted">{b.label} &middot; {b.count}</div>
+              </div>
+            ))}
+          </div>
+          {oldest.length ? (
+            <ul className="text-sm divide-y divide-border">
+              {oldest.map((i) => <li key={i.id} className="py-1.5 flex justify-between gap-2"><Link href={`/invoices/${i.id}`} className="hover:text-accent">INV-{String(i.number).padStart(5, "0")} &middot; {i.customer.firstName} {i.customer.lastName}</Link><span className="text-muted tabular-nums">{differenceInDays(now, i.issuedAt)}d &middot; {money(Number(i.total) - Number(i.amountPaid))}</span></li>)}
+            </ul>
+          ) : <p className="text-sm text-emerald-400">Nothing outstanding.</p>}
+        </Card>
+        <Card title="Customer retention">
+          <div className="grid grid-cols-2 gap-3 text-center">
+            <div className="rounded-lg bg-bg-elevated border border-border p-3"><div className="text-2xl font-semibold">{returning}</div><div className="text-[11px] text-muted">returning customers</div></div>
+            <div className="rounded-lg bg-bg-elevated border border-border p-3"><div className="text-2xl font-semibold">{brandNew}</div><div className="text-[11px] text-muted">first-time customers</div></div>
+          </div>
+          <Progress value={invoicedCustomers.size ? returning / invoicedCustomers.size : 0} tone="green" className="mt-4" />
+          <p className="text-xs text-muted mt-2">{invoicedCustomers.size ? Math.round((returning / invoicedCustomers.size) * 100) : 0}% of customers invoiced in this period had visited before.</p>
+        </Card>
+        <Card className="xl:col-span-2" title="Sales tax collected (6 months)" padded={false}>
+          <table className="table">
+            <thead><tr><th>Month</th><th className="text-right">Invoices</th><th className="text-right">Taxable sales</th><th className="text-right">Tax collected</th></tr></thead>
+            <tbody>
+              {taxByMonth.map((m) => <tr key={m.label}><td>{m.label}</td><td className="text-right tabular-nums">{m.invoices}</td><td className="text-right tabular-nums">{money(m.taxable)}</td><td className="text-right tabular-nums font-medium">{money(m.tax)}</td></tr>)}
+            </tbody>
+          </table>
+        </Card>
+        <Card title="Parts sales by category" padded={false}>
+          <table className="table">
+            <thead><tr><th>Category</th><th className="text-right">Units</th><th className="text-right">Margin</th></tr></thead>
+            <tbody>
+              {categories.map(([cat, v]) => <tr key={cat}><td className="text-sm">{cat}<div className="text-[11px] text-muted">{money(v.revenue)}</div></td><td className="text-right tabular-nums">{v.units}</td><td className={`text-right tabular-nums ${v.revenue && (v.revenue - v.cost) / v.revenue < 0.2 ? "text-amber-400" : ""}`}>{v.revenue ? Math.round(((v.revenue - v.cost) / v.revenue) * 100) : 0}%</td></tr>)}
+              {!categories.length ? <tr><td colSpan={3} className="text-center text-muted py-6">No parts sold in range.</td></tr> : null}
+            </tbody>
+          </table>
         </Card>
         <Card className="xl:col-span-3" title="Technician performance" padded={false}>
           <table className="table">

@@ -67,7 +67,7 @@ export default async function PortalServicePage({ params, searchParams }: { para
           {w.technicianNotes ? <p className="text-sm text-muted mt-3 pt-3 border-t border-border whitespace-pre-line">{w.technicianNotes}</p> : null}
           {w.promisedAt ? <p className="text-xs text-muted mt-3">Estimated ready: {fmtDateTime(w.promisedAt)}</p> : null}
         </Card>
-        <Card title="Inspection report">
+        <Card title="Inspection report" action={w.inspection ? <Link href={`/portal/service/${w.id}/inspection`} className="text-xs text-accent hover:underline">Full report →</Link> : null}>
           {findings.length ? (
             <ul className="space-y-1.5 text-sm">
               {findings.map((i) => <li key={i.id} className="flex items-start gap-2"><span className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${INSPECTION_RESULT[i.result].dot}`} /><span><span className="font-medium">{i.name}</span> <span className="text-muted">— {INSPECTION_RESULT[i.result].label}{i.notes ? `: ${i.notes}` : ""}</span></span></li>)}

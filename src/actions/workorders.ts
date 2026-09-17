@@ -9,6 +9,7 @@ import { requireStaff, BILLING_ROLES } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { computeTotals } from "@/lib/money";
 import { queueNotification } from "@/lib/notify";
+import { renderTemplate } from "@/lib/templates";
 import { emitWebhook } from "@/lib/webhooks";
 import type { FormState } from "./customers";
 import type { WorkOrderStatus } from "@/generated/prisma/enums";
@@ -258,15 +259,12 @@ export async function setWorkOrderStatus(id: string, status: WorkOrderStatus) {
   }
   if (status === "COMPLETED") {
     await db.appointment.updateMany({ where: { workOrderId: id }, data: { status: "COMPLETED" } });
-    await queueNotification({
-      customerId: wo.customerId,
-      workOrderId: id,
-      subject: "Your vehicle is ready",
-      body: `Your ${wo.vehicle.year} ${wo.vehicle.make} ${wo.vehicle.model} is ready for pickup.`,
-    });
+    const t = await renderTemplate("vehicle_ready", { customer: wo.customer.firstName, vehicle: `${wo.vehicle.year} ${wo.vehicle.make} ${wo.vehicle.model}` });
+    await queueNotification({ customerId: wo.customerId, workOrderId: id, ...t });
   }
   if (status === "ON_HOLD") {
-    await queueNotification({ customerId: wo.customerId, workOrderId: id, subject: "Waiting on parts", body: `We're waiting on parts for your ${wo.vehicle.year} ${wo.vehicle.make} ${wo.vehicle.model}. We'll update you as soon as they arrive.` });
+    const t = await renderTemplate("waiting_parts", { customer: wo.customer.firstName, vehicle: `${wo.vehicle.year} ${wo.vehicle.make} ${wo.vehicle.model}` });
+    await queueNotification({ customerId: wo.customerId, workOrderId: id, ...t });
   }
   await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: `status:${status}`, entity: "WorkOrder", entityId: id, detail: `#${wo.number}` } });
   emitWebhook("work_order.status_changed", { id, number: wo.number, from: wo.status, to: status, vehicle: wo.vehicle, customer: { id: wo.customer.id, firstName: wo.customer.firstName, lastName: wo.customer.lastName }, by: user.name });
@@ -286,13 +284,8 @@ export async function sendForApproval(id: string) {
   await db.workOrder.update({ where: { id }, data: { status: "AWAITING_APPROVAL", approvalToken: token, sentForApprovalAt: new Date(), approvedAt: null, approvedBy: null, declinedAt: null } });
   const settings = await getSettings();
   const totals = computeTotals(wo.lines, settings.taxRate, { taxExempt: wo.customer.taxExempt });
-  await queueNotification({
-    customerId: wo.customerId,
-    workOrderId: id,
-    subject: "Your estimate is ready",
-    body: `Hi ${wo.customer.firstName}, your estimate for the ${wo.vehicle.year} ${wo.vehicle.make} ${wo.vehicle.model} (${totals.total.toLocaleString("en-US", { style: "currency", currency: "USD" })}) is ready. Review and approve it here: ${link}`,
-    channels: ["EMAIL", "SMS", "PORTAL"],
-  });
+  const t = await renderTemplate("estimate_ready", { customer: wo.customer.firstName, vehicle: `${wo.vehicle.year} ${wo.vehicle.make} ${wo.vehicle.model}`, total: totals.total.toLocaleString("en-US", { style: "currency", currency: "USD" }), link });
+  await queueNotification({ customerId: wo.customerId, workOrderId: id, ...t, channels: ["EMAIL", "SMS", "PORTAL"] });
   await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "send_for_approval", entity: "WorkOrder", entityId: id, detail: `#${wo.number}` } });
   emitWebhook("work_order.sent_for_approval", { id, number: wo.number, total: totals.total, approvalUrl: link, vehicle: wo.vehicle, customer: { id: wo.customer.id, firstName: wo.customer.firstName, lastName: wo.customer.lastName, email: wo.customer.email } });
   revalidatePath(`/work-orders/${id}`);
@@ -389,7 +382,8 @@ export async function createInvoice(workOrderId: string) {
     await tx.timeEntry.updateMany({ where: { workOrderId, endedAt: null }, data: { endedAt: new Date() } });
     return inv;
   });
-  await queueNotification({ customerId: wo.customerId, workOrderId, subject: `Invoice ${String(invoice.number).padStart(5, "0")}`, body: `Your invoice for ${t.total.toLocaleString("en-US", { style: "currency", currency: "USD" })} is ready to view in your portal.` });
+  const tpl = await renderTemplate("invoice_ready", { customer: wo.customer.firstName, invoice: `INV-${String(invoice.number).padStart(5, "0")}`, total: t.total.toLocaleString("en-US", { style: "currency", currency: "USD" }) });
+  await queueNotification({ customerId: wo.customerId, workOrderId, ...tpl });
   await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "invoice", entity: "Invoice", entityId: invoice.id, detail: `WO-${wo.number}` } });
   emitWebhook("invoice.created", { ...invoice, workOrderNumber: wo.number, customer: { id: wo.customer.id, firstName: wo.customer.firstName, lastName: wo.customer.lastName, email: wo.customer.email } });
   revalidatePath(`/work-orders/${workOrderId}`);

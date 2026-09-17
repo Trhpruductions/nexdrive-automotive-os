@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, Package, Plus, ScanBarcode, Truck } from "lucide-react";
+import { AlertTriangle, ClipboardList, Package, Plus, ScanBarcode, Truck } from "lucide-react";
 import { requireStaff } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Badge, Card, EmptyState, Flash, KpiCard, PageHeader } from "@/components/ui";
@@ -38,6 +38,7 @@ export default async function PartsPage({ searchParams }: { searchParams: Promis
         subtitle={`${all.length} SKU${all.length === 1 ? "" : "s"} · ${num(all.reduce((s, p) => s + p.quantityOnHand, 0))} units on hand`}
         actions={
           <>
+            <Link href="/parts/orders" className="btn btn-secondary"><ClipboardList size={16} /> Purchase orders</Link>
             <Link href="/parts/suppliers" className="btn btn-secondary"><Truck size={16} /> Suppliers</Link>
             <Link href="/parts/scan" className="btn btn-secondary"><ScanBarcode size={16} /> Scan</Link>
             <Link href="/parts/new" className="btn btn-primary"><Plus size={16} /> Add part</Link>
@@ -46,7 +47,7 @@ export default async function PartsPage({ searchParams }: { searchParams: Promis
       />
       <Flash searchParams={sp} />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
-        <KpiCard label="Low stock" value={lowCount} hint="At or below reorder point" icon={AlertTriangle} tone={lowCount ? "amber" : "green"} href="/parts?filter=low" />
+        <KpiCard label="Low stock" value={lowCount} hint={lowCount ? "At or below reorder point — create a purchase order" : "All above reorder point"} icon={AlertTriangle} tone={lowCount ? "amber" : "green"} href={lowCount ? "/parts/orders/new" : "/parts?filter=low"} />
         <KpiCard label="Stock value (cost)" value={money(stockValue)} icon={Boxes} />
         <KpiCard label="Stock value (retail)" value={money(retailValue)} icon={DollarSign} tone="green" />
       </div>

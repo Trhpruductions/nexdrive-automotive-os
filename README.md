@@ -2,7 +2,7 @@
 
 Complete automotive business management software by **NexDrive Productions** — work orders, estimates with digital customer approval, invoicing & payments, digital multi-point inspections, scheduling with bays and technicians, parts & inventory, a customer portal, an AI assistant, and a live production-floor / inventory feed layer.
 
-Every shop that runs it tailors it under **Settings**: branding (name, logo, accent colour), business details, tax & labor rates, hours, bays, which modules appear, the inspection checklist, canned services, staff roles and the machine / inventory feeds. The seeded shop is **Plex Roswell Automotive**.
+Every shop that runs it tailors it under **Settings**: branding (name, logo, accent colour), business details, tax & labor rates, hours, bays, which modules appear, the inspection checklist, canned services, customer notification templates, staff roles and the machine / inventory feeds. The seeded shop is **Plex Roswell Automotive**.
 
 Design reference: `design/nexdrive-os-mockup.png` (the 8-panel mockup) and `design/nexdrive-logo-original.png`.
 
@@ -76,6 +76,15 @@ Portal notifications, messages, estimate links and the AI's data access work wit
 
 Complaint → Diagnosis → Estimate (parts, labor, fees, canned services) → **Send for approval** (email/SMS/portal link, line-by-line approval, name signature) → Repair (time clock, waiting-parts hold) → Inspection (tablet checklist with photos, shown to the customer) → Complete → **Invoice** (parts consumed from stock) → Payments.
 
+Around that core:
+
+- **Scheduling** — day board with drag-and-drop: drag a block to another bay or time slot (snaps to 15 min); bay and technician conflicts are flagged and can be overridden. Overlapping bookings stack in lanes so nothing is hidden.
+- **Purchase orders** — Parts → Purchase orders. Low-stock parts are pre-filled with a reorder quantity; orders go draft → sent → (partially) received. Receiving adds stock, records a movement per part and updates the part's cost. Each order prints as a supplier sheet.
+- **VIN decode** — the vehicle form's *Decode* button fills year/make/model/trim/engine/transmission from the NHTSA vPIC database (`GET /api/vin/{vin}`).
+- **Printable inspection reports** — every inspection has a print view (`/inspections/{id}/print`) and the customer sees the same report in the portal.
+- **Notification templates** — Settings → Notification templates edits the wording of every customer message (estimate ready, vehicle ready, waiting on parts, appointment booked/confirmed, invoice ready, payment received) with `{customer} {vehicle} {shop} {total} {link} {date} {time} …` placeholders.
+- **Reports** — collected vs prior period, revenue mix, monthly trend, payments by method, technician performance, AR aging with the oldest open invoices, sales tax by month, parts sales & margin by category, and customer retention.
+
 ## Production lines & inventory feeds
 
 Settings → **Integrations** connects any data source. Everything is normalised into one event format:
@@ -128,7 +137,7 @@ Settings → **API & Webhooks** issues keys for other systems (accounting, parts
 
 Lists paginate with `?page=&limit=` (max 200) and return `{ data, page, limit, total, pages }`. Errors are `{ error: { code, message } }` with 401/403/404/409/422 as appropriate.
 
-**Outbound webhooks** notify other software when things happen: `customer.created`, `vehicle.created`, `work_order.created / status_changed / sent_for_approval / approved / declined`, `invoice.created / paid`, `payment.recorded`, `appointment.created / status_changed`, `part.low_stock`, `machine.status_changed / alarm`. Each delivery is a JSON envelope `{ id, event, at, data }` signed with `X-NexDrive-Signature: sha256=HMAC_SHA256(secret, body)`; failures retry twice and every delivery is logged in Settings.
+**Outbound webhooks** notify other software when things happen: `customer.created`, `vehicle.created`, `work_order.created / status_changed / sent_for_approval / approved / declined`, `invoice.created / paid`, `payment.recorded`, `appointment.created / status_changed / rescheduled`, `part.low_stock`, `machine.status_changed / alarm`. Each delivery is a JSON envelope `{ id, event, at, data }` signed with `X-NexDrive-Signature: sha256=HMAC_SHA256(secret, body)`; failures retry twice and every delivery is logged in Settings.
 
 ## Scripts
 

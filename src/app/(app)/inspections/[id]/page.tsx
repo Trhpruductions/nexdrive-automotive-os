@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CheckCheck, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCheck, Plus, Printer, Save, Trash2 } from "lucide-react";
 import { requireStaff, can, BILLING_ROLES } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Card, Flash, PageHeader } from "@/components/ui";
@@ -58,6 +58,7 @@ export default async function InspectionPage({ params, searchParams }: { params:
         actions={
           <>
             <form action={markAllGood.bind(null, insp.id)}><button className="btn btn-secondary"><CheckCheck size={15} /> Mark unchecked as good</button></form>
+            <Link href={`/inspections/${insp.id}/print`} className="btn btn-secondary"><Printer size={15} /> Print report</Link>
             <Link href={`/work-orders/${insp.workOrderId}`} className="btn btn-primary">Back to work order</Link>
           </>
         }

@@ -2,6 +2,7 @@ import { addMinutes, endOfDay, startOfDay } from "date-fns";
 import { db, currentShopId } from "@/lib/db";
 import { ApiError, date, handler, json, num, pageResponse, paging, readBody, str } from "@/lib/api";
 import { queueNotification } from "@/lib/notify";
+import { renderTemplate } from "@/lib/templates";
 import { emitWebhook } from "@/lib/webhooks";
 
 export const GET = handler("read", async (req) => {
@@ -39,7 +40,8 @@ export const POST = handler("write", async (req) => {
     include: { vehicle: true, customer: { select: { id: true, firstName: true, lastName: true } } },
   });
   if (b.notify !== false) {
-    await queueNotification({ customerId: a.customerId, subject: "Appointment booked", body: `Your ${a.vehicle.year} ${a.vehicle.make} ${a.vehicle.model} is booked for ${start.toLocaleString("en-US", { weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} — ${a.serviceRequested}.` });
+    const t = await renderTemplate("appointment_booked", { customer: a.customer.firstName, vehicle: `${a.vehicle.year} ${a.vehicle.make} ${a.vehicle.model}`, date: start.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }), time: start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }), service: a.serviceRequested });
+    await queueNotification({ customerId: a.customerId, ...t });
   }
   emitWebhook("appointment.created", a);
   return json(a, { status: 201 });

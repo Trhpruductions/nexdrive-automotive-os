@@ -168,6 +168,22 @@ export async function deleteCannedService(id: string) {
   back("services", "Service removed");
 }
 
+// ───────── Notification templates ─────────
+export async function saveTemplates(formData: FormData) {
+  await requireStaff(MANAGER_ROLES);
+  const { TEMPLATE_EVENTS } = await import("@/lib/templates");
+  const templates: Record<string, { subject?: string; body?: string }> = {};
+  for (const ev of TEMPLATE_EVENTS) {
+    const subject = String(formData.get(`${ev.key}_subject`) ?? "").trim();
+    const body = String(formData.get(`${ev.key}_body`) ?? "").trim();
+    if (subject || body) templates[ev.key] = { ...(subject ? { subject } : {}), ...(body ? { body } : {}) };
+  }
+  await db.shopSettings.update({ where: { shopId: await currentShopId() }, data: { templates: Object.keys(templates).length ? templates : undefined } });
+  if (!Object.keys(templates).length) await db.shopSettings.update({ where: { shopId: await currentShopId() }, data: { templates: {} } });
+  revalidateAll();
+  back("templates", "Templates saved");
+}
+
 // ───────── Users ─────────
 const UserSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),

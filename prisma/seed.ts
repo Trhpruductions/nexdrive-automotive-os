@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -89,7 +88,7 @@ async function main() {
       invoiceFooter: "Thank you for trusting Plex Roswell Automotive. All repairs carry a 24-month / 24,000-mile warranty on parts and labor.",
       approvalMessage: "Review your estimate below. Approve the items you'd like us to complete and we'll get started right away.",
       portalWelcome: "Track your vehicles, approve estimates and view your service history — all in one place.",
-      modules: ["vehicles", "customers", "workOrders", "schedule", "estimates", "invoices", "parts", "technicians", "inspections", "reports", "payments", "ai", "production", "messages", "notifications"],
+      modules: ["vehicles", "customers", "workOrders", "schedule", "estimates", "invoices", "parts", "technicians", "inspections", "reports", "payments", "production", "messages", "notifications"],
     },
   });
 

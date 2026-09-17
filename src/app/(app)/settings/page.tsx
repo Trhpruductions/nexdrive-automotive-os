@@ -8,7 +8,8 @@ import { Badge, Card, Field, Flash, PageHeader } from "@/components/ui";
 import { ConfirmButton } from "@/components/app/confirm-button";
 import { MODULES, ROLE_LABEL, US_STATES } from "@/lib/constants";
 import { money } from "@/lib/format";
-import { addBay, addTemplateItem, createUser, deleteBay, deleteCannedService, deleteTemplateItem, moveTemplateItem, saveBranding, saveBusiness, saveModules, saveRates, toggleBay, updateUser } from "@/actions/settings";
+import { addBay, addTemplateItem, createUser, deleteBay, deleteCannedService, deleteTemplateItem, moveTemplateItem, saveBranding, saveBusiness, saveModules, saveRates, saveTemplates, toggleBay, updateUser } from "@/actions/settings";
+import { DEFAULT_TEMPLATES, TEMPLATE_EVENTS } from "@/lib/templates";
 import { CannedServiceEditor } from "./canned-service-editor";
 import { IntegrationsTab } from "./integrations-tab";
 import { ApiTab } from "./api-tab";
@@ -23,6 +24,7 @@ const TABS = [
   { key: "modules", label: "Modules" },
   { key: "inspection", label: "Inspection checklist" },
   { key: "services", label: "Canned services" },
+  { key: "templates", label: "Notification templates" },
   { key: "users", label: "Users & roles" },
   { key: "integrations", label: "Integrations" },
   { key: "api", label: "API & Webhooks" },
@@ -126,6 +128,23 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
       {tab === "inspection" ? <InspectionTab /> : null}
       {tab === "services" ? <ServicesTab edit={sp.edit} /> : null}
+      {tab === "templates" ? (
+        <Card title="Notification templates" action={<span className="text-xs text-muted">Blank = built-in default. Placeholders in braces are filled per message.</span>}>
+          <form action={saveTemplates} className="space-y-5 max-w-3xl">
+            {TEMPLATE_EVENTS.map((ev) => {
+              const custom = s.templates?.[ev.key];
+              return (
+                <div key={ev.key} className="card p-4 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium text-sm">{ev.label}</span><span className="text-[11px] text-faint font-mono">{ev.vars.map((v) => `{${v}}`).join(" ")}</span></div>
+                  <input name={`${ev.key}_subject`} defaultValue={custom?.subject ?? ""} placeholder={DEFAULT_TEMPLATES[ev.key].subject} className="input" />
+                  <textarea name={`${ev.key}_body`} rows={2} defaultValue={custom?.body ?? ""} placeholder={DEFAULT_TEMPLATES[ev.key].body} className="textarea" />
+                </div>
+              );
+            })}
+            <button className="btn btn-primary"><Save size={15} /> Save templates</button>
+          </form>
+        </Card>
+      ) : null}
       {tab === "users" ? <UsersTab meId={me.id} meRole={me.role} /> : null}
       {tab === "integrations" ? <IntegrationsTab newKey={sp.newKey} newId={sp.newId} /> : null}
       {tab === "api" ? <ApiTab newKey={sp.newKey} newId={sp.newId} newSecret={sp.newSecret} newHook={sp.newHook} /> : null}

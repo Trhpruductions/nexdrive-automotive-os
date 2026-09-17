@@ -66,6 +66,10 @@ export function woNumber(n: number) {
   return `WO-${String(n).padStart(5, "0")}`;
 }
 
+export function poNumber(n: number) {
+  return `PO-${String(n).padStart(5, "0")}`;
+}
+
 export function invNumber(n: number) {
   return `INV-${String(n).padStart(5, "0")}`;
 }
@@ -84,4 +88,17 @@ export function greeting(date = new Date()) {
   if (h < 12) return "Good morning";
   if (h < 17) return "Good afternoon";
   return "Good evening";
+}
+
+/** Stack overlapping blocks in a row into lanes so double-bookings stay visible. */
+export function laneLayout<T extends { scheduledStart: Date; scheduledEnd: Date }>(items: T[]) {
+  const sorted = [...items].sort((a, b) => a.scheduledStart.getTime() - b.scheduledStart.getTime());
+  const laneEnds: number[] = [];
+  const placed = sorted.map((a) => {
+    let lane = laneEnds.findIndex((end) => end <= a.scheduledStart.getTime());
+    if (lane === -1) lane = laneEnds.push(0) - 1;
+    laneEnds[lane] = a.scheduledEnd.getTime();
+    return { item: a, lane };
+  });
+  return { placed, lanes: Math.max(1, laneEnds.length) };
 }

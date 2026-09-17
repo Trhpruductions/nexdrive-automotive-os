@@ -8,3 +8,9 @@
 *.css text eol=lf
 *.png binary
 *.webp binary
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+Dockerfile text eol=lf
+Caddyfile text eol=lf
+*.js text eol=lf

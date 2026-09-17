@@ -7,6 +7,7 @@ import { addMinutes, format } from "date-fns";
 import { db, currentShopId } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
 import { queueNotification } from "@/lib/notify";
+import { renderTemplate } from "@/lib/templates";
 import { emitWebhook } from "@/lib/webhooks";
 import type { FormState } from "./customers";
 import type { AppointmentStatus } from "@/generated/prisma/enums";
@@ -58,11 +59,9 @@ export async function createAppointment(_prev: FormState, formData: FormData): P
     data: { shopId: await currentShopId(), customerId: d.customerId, vehicleId: d.vehicleId, scheduledStart: start, scheduledEnd: end, serviceRequested: d.serviceRequested, technicianId, bayId, notes: opt(d.notes), dropOff: d.dropOff, status: d.status ?? "SCHEDULED" },
     include: { vehicle: true },
   });
-  await queueNotification({
-    customerId: d.customerId,
-    subject: "Appointment booked",
-    body: `Your ${appt.vehicle.year} ${appt.vehicle.make} ${appt.vehicle.model} is booked for ${format(start, "EEEE, MMM d 'at' h:mm a")} — ${d.serviceRequested}.`,
-  });
+  const cust = await db.customer.findUnique({ where: { id: d.customerId }, select: { firstName: true } });
+  const t = await renderTemplate("appointment_booked", { customer: cust?.firstName ?? "", vehicle: `${appt.vehicle.year} ${appt.vehicle.make} ${appt.vehicle.model}`, date: format(start, "EEEE, MMM d"), time: format(start, "h:mm a"), service: d.serviceRequested });
+  await queueNotification({ customerId: d.customerId, ...t });
   await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "create", entity: "Appointment", entityId: appt.id } });
   emitWebhook("appointment.created", appt);
   revalidatePath("/schedule");
@@ -95,12 +94,35 @@ export async function setAppointmentStatus(id: string, status: AppointmentStatus
   const a = await db.appointment.update({ where: { id }, data: { status } });
   emitWebhook("appointment.status_changed", { id: a.id, status, scheduledStart: a.scheduledStart, vehicleId: a.vehicleId, customerId: a.customerId });
   if (status === "CONFIRMED") {
-    const v = await db.vehicle.findUnique({ where: { id: a.vehicleId } });
-    await queueNotification({ customerId: a.customerId, subject: "Appointment confirmed", body: `See you ${format(a.scheduledStart, "EEEE, MMM d 'at' h:mm a")} for your ${v?.year} ${v?.make} ${v?.model}.` });
+    const v = await db.vehicle.findUnique({ where: { id: a.vehicleId }, include: { customer: { select: { firstName: true } } } });
+    const t = await renderTemplate("appointment_confirmed", { customer: v?.customer.firstName ?? "", vehicle: `${v?.year} ${v?.make} ${v?.model}`, date: format(a.scheduledStart, "EEEE, MMM d"), time: format(a.scheduledStart, "h:mm a") });
+    await queueNotification({ customerId: a.customerId, ...t });
   }
   revalidatePath("/schedule");
   revalidatePath(`/schedule/${id}`);
   redirect(`/schedule/${id}?ok=${encodeURIComponent(status.replace("_", " ").toLowerCase())}`);
+}
+
+/** Drag-and-drop reschedule from the day board: keeps the duration, moves bay + start. */
+export async function moveAppointment(id: string, bayId: string | null, startIso: string, force = false): Promise<{ error?: string; conflict?: string }> {
+  await requireStaff();
+  const a = await db.appointment.findUnique({ where: { id } });
+  if (!a) return { error: "Appointment not found" };
+  const start = new Date(startIso);
+  if (Number.isNaN(start.getTime())) return { error: "Invalid time" };
+  const end = new Date(start.getTime() + (a.scheduledEnd.getTime() - a.scheduledStart.getTime()));
+  if (bayId) {
+    const bay = await db.bay.findUnique({ where: { id: bayId } });
+    if (!bay) return { error: "Bay not found" };
+  }
+  const problems = await conflicts(bayId, a.technicianId, start, end, id);
+  if (problems.length && !force) return { conflict: problems.join(". ") };
+  const updated = await db.appointment.update({ where: { id }, data: { bayId, scheduledStart: start, scheduledEnd: end } });
+  emitWebhook("appointment.rescheduled", { id: updated.id, bayId, scheduledStart: updated.scheduledStart, scheduledEnd: updated.scheduledEnd, vehicleId: updated.vehicleId, customerId: updated.customerId });
+  revalidatePath("/schedule");
+  revalidatePath(`/schedule/${id}`);
+  revalidatePath("/dashboard");
+  return {};
 }
 
 export async function deleteAppointment(id: string) {

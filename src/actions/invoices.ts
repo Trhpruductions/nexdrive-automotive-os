@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db, currentShopId } from "@/lib/db";
 import { requireStaff, BILLING_ROLES } from "@/lib/auth";
 import { queueNotification } from "@/lib/notify";
+import { renderTemplate } from "@/lib/templates";
 import { round2 } from "@/lib/money";
 import { emitWebhook } from "@/lib/webhooks";
 import type { PaymentMethod } from "@/generated/prisma/enums";
@@ -25,7 +26,9 @@ export async function recordPayment(invoiceId: string, formData: FormData) {
     db.invoice.update({ where: { id: invoiceId }, data: { amountPaid: paid, status: paid >= Number(inv.total) - 0.005 ? "PAID" : "PARTIAL" } }),
   ]);
   if (paid >= Number(inv.total) - 0.005) {
-    await queueNotification({ customerId: inv.customerId, workOrderId: inv.workOrderId, subject: "Payment received — thank you", body: `We received your payment of $${amount.toFixed(2)}. Your invoice is paid in full.` });
+    const c = await db.customer.findUnique({ where: { id: inv.customerId }, select: { firstName: true } });
+    const t = await renderTemplate("payment_received", { customer: c?.firstName ?? "", amount: `$${amount.toFixed(2)}`, invoice: `INV-${String(inv.number).padStart(5, "0")}` });
+    await queueNotification({ customerId: inv.customerId, workOrderId: inv.workOrderId, ...t });
   }
   await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "payment", entity: "Invoice", entityId: invoiceId, detail: `$${amount.toFixed(2)} ${method}` } });
   emitWebhook("payment.recorded", { invoiceId, invoiceNumber: inv.number, amount, method, reference, amountPaid: paid, total: Number(inv.total), customerId: inv.customerId, by: user.name });
@@ -61,7 +64,9 @@ export async function updateInvoiceNotes(invoiceId: string, formData: FormData) 
 export async function resendInvoice(invoiceId: string) {
   await requireStaff(BILLING_ROLES);
   const inv = await db.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
-  await queueNotification({ customerId: inv.customerId, workOrderId: inv.workOrderId, subject: `Invoice ${String(inv.number).padStart(5, "0")}`, body: `Your invoice for $${Number(inv.total).toFixed(2)} is available in your portal. Balance due: $${(Number(inv.total) - Number(inv.amountPaid)).toFixed(2)}.` });
+  const c = await db.customer.findUnique({ where: { id: inv.customerId }, select: { firstName: true } });
+  const t = await renderTemplate("invoice_ready", { customer: c?.firstName ?? "", invoice: `INV-${String(inv.number).padStart(5, "0")}`, total: `$${Number(inv.total).toFixed(2)}` });
+  await queueNotification({ customerId: inv.customerId, workOrderId: inv.workOrderId, ...t });
   revalidatePath(`/invoices/${invoiceId}`);
   redirect(`/invoices/${invoiceId}?ok=Invoice+sent`);
 }
