@@ -7,7 +7,7 @@ import { requireStaff, BILLING_ROLES } from "@/lib/auth";
 import { queueNotification } from "@/lib/notify";
 import { renderTemplate } from "@/lib/templates";
 import { round2 } from "@/lib/money";
-import { emitWebhook } from "@/lib/webhooks";
+import { applyPayment } from "@/lib/payments";
 import type { PaymentMethod } from "@/generated/prisma/enums";
 
 export async function recordPayment(invoiceId: string, formData: FormData) {
@@ -20,19 +20,7 @@ export async function recordPayment(invoiceId: string, formData: FormData) {
   const balance = round2(Number(inv.total) - Number(inv.amountPaid));
   if (!(amount > 0)) redirect(`/invoices/${invoiceId}?error=Enter+an+amount`);
   if (amount > balance + 0.005) redirect(`/invoices/${invoiceId}?error=${encodeURIComponent(`Amount exceeds balance of $${balance.toFixed(2)}`)}`);
-  const paid = round2(Number(inv.amountPaid) + amount);
-  await db.$transaction([
-    db.payment.create({ data: { invoiceId, amount, method, reference } }),
-    db.invoice.update({ where: { id: invoiceId }, data: { amountPaid: paid, status: paid >= Number(inv.total) - 0.005 ? "PAID" : "PARTIAL" } }),
-  ]);
-  if (paid >= Number(inv.total) - 0.005) {
-    const c = await db.customer.findUnique({ where: { id: inv.customerId }, select: { firstName: true } });
-    const t = await renderTemplate("payment_received", { customer: c?.firstName ?? "", amount: `$${amount.toFixed(2)}`, invoice: `INV-${String(inv.number).padStart(5, "0")}` });
-    await queueNotification({ customerId: inv.customerId, workOrderId: inv.workOrderId, ...t });
-  }
-  await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "payment", entity: "Invoice", entityId: invoiceId, detail: `$${amount.toFixed(2)} ${method}` } });
-  emitWebhook("payment.recorded", { invoiceId, invoiceNumber: inv.number, amount, method, reference, amountPaid: paid, total: Number(inv.total), customerId: inv.customerId, by: user.name });
-  if (paid >= Number(inv.total) - 0.005) emitWebhook("invoice.paid", { id: invoiceId, number: inv.number, total: Number(inv.total), customerId: inv.customerId, workOrderId: inv.workOrderId });
+  await applyPayment({ invoiceId, amount, method, reference, userId: user.id, by: user.name });
   revalidatePath(`/invoices/${invoiceId}`);
   revalidatePath("/invoices");
   revalidatePath("/payments");

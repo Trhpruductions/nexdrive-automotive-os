@@ -8,11 +8,15 @@ import { Badge, Card, Field, Flash, PageHeader } from "@/components/ui";
 import { ConfirmButton } from "@/components/app/confirm-button";
 import { MODULES, ROLE_LABEL, US_STATES } from "@/lib/constants";
 import { money } from "@/lib/format";
-import { addBay, addTemplateItem, createUser, deleteBay, deleteCannedService, deleteTemplateItem, moveTemplateItem, saveBranding, saveBusiness, saveModules, saveRates, saveTemplates, toggleBay, updateUser } from "@/actions/settings";
+import { addBay, addTemplateItem, createUser, deleteBay, deleteCannedService, deleteTemplateItem, moveTemplateItem, saveBranding, saveBusiness, runRemindersNow, saveModules, saveRates, saveTemplates, toggleBay, updateUser } from "@/actions/settings";
 import { DEFAULT_TEMPLATES, TEMPLATE_EVENTS } from "@/lib/templates";
 import { CannedServiceEditor } from "./canned-service-editor";
 import { IntegrationsTab } from "./integrations-tab";
 import { ApiTab } from "./api-tab";
+import { PaymentsTab } from "./payments-tab";
+import { CopyField } from "./copy-field";
+import { headers } from "next/headers";
+import { rawDb } from "@/lib/db";
 
 export const metadata = { title: "Settings" };
 
@@ -26,6 +30,7 @@ const TABS = [
   { key: "services", label: "Canned services" },
   { key: "templates", label: "Notification templates" },
   { key: "users", label: "Users & roles" },
+  { key: "payments", label: "Payments" },
   { key: "integrations", label: "Integrations" },
   { key: "api", label: "API & Webhooks" },
 ];
@@ -35,6 +40,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const s = await getSettings();
   const sp = await searchParams;
   const tab = TABS.some((t) => t.key === sp.tab) ? sp.tab! : "branding";
+  const shopSlug = (await rawDb.shop.findUnique({ where: { id: me.activeShopId! }, select: { slug: true } }))?.slug ?? "";
+  const hdrs = await headers();
+  const base = process.env.APP_URL?.replace(/\/$/, "") ?? `${hdrs.get("x-forwarded-proto") ?? "http"}://${hdrs.get("host")}`;
 
   return (
     <div>
@@ -88,6 +96,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </div>
             <Field label="Time zone"><input name="timezone" defaultValue={s.timezone} className="input" placeholder="America/Denver" /></Field>
             <Field label="Currency"><select name="currency" defaultValue={s.currency} className="select">{["USD", "CAD", "EUR", "GBP", "AUD", "MXN"].map((c) => <option key={c} value={c}>{c}</option>)}</select></Field>
+            <div className="sm:col-span-2 mt-2 pt-4 border-t border-border">
+              <div className="card-title mb-2">Online booking</div>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="onlineBooking" defaultChecked={s.onlineBooking} className="accent-[var(--accent)]" /> Let customers book from a public page (no account needed)</label>
+              <p className="text-xs text-muted mt-1">Share this link on your website, Google profile or social pages. Requests land in Schedule and Messages for you to confirm.</p>
+              <CopyField value={`${base}/book/${shopSlug}`} />
+            </div>
+            <Field label="Booking page notes" className="sm:col-span-2" hint="Shown beside the form — e.g. drop-off instructions, what to bring"><textarea name="bookingNotes" rows={2} defaultValue={s.bookingNotes ?? ""} className="textarea" /></Field>
             <div className="sm:col-span-2"><button className="btn btn-primary"><Save size={15} /> Save details</button></div>
           </form>
         </Card>
@@ -143,9 +158,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             })}
             <button className="btn btn-primary"><Save size={15} /> Save templates</button>
           </form>
+          <div className="mt-6 pt-5 border-t border-border flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted max-w-xl">Maintenance reminders go out automatically once a vehicle is within 14 days or 500 miles of a due service (checked hourly). Each reminder is sent once.</p>
+            <form action={runRemindersNow}><button className="btn btn-secondary btn-sm">Send due reminders now</button></form>
+          </div>
         </Card>
       ) : null}
       {tab === "users" ? <UsersTab meId={me.id} meRole={me.role} /> : null}
+      {tab === "payments" ? <PaymentsTab shopId={me.activeShopId!} /> : null}
       {tab === "integrations" ? <IntegrationsTab newKey={sp.newKey} newId={sp.newId} /> : null}
       {tab === "api" ? <ApiTab newKey={sp.newKey} newId={sp.newId} newSecret={sp.newSecret} newHook={sp.newHook} /> : null}
     </div>

@@ -30,7 +30,7 @@ export default async function PortalLayout({ children }: { children: React.React
           </Link>
           <PortalNav unreadMessages={unreadMsgs} unreadNotifications={unreadNotes} />
           <div className="ml-auto flex items-center gap-2">
-            <span className="hidden sm:block text-sm text-muted">{user.name}</span>
+            <Link href="/portal/account" className="hidden sm:block text-sm text-muted hover:text-text">{user.name}</Link>
             <form action={logout}><button className="btn btn-ghost btn-sm"><LogOut size={14} /> Sign out</button></form>
           </div>
         </div>

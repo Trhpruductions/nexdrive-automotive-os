@@ -89,6 +89,9 @@ export function AppShell({
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setMenu(false)} />
                 <div className="absolute right-0 mt-2 w-48 card p-1.5 z-20 shadow-2xl">
+                  <Link href="/account" onClick={() => setMenu(false)} className="block rounded-md px-3 py-2 text-sm text-muted hover:text-text hover:bg-card-hover">
+                    My account
+                  </Link>
                   <Link href="/settings" onClick={() => setMenu(false)} className="block rounded-md px-3 py-2 text-sm text-muted hover:text-text hover:bg-card-hover">
                     Shop settings
                   </Link>

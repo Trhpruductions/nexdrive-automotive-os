@@ -10,11 +10,11 @@ export const metadata = { title: "Sign in" };
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; portal?: string }>;
+  searchParams: Promise<{ next?: string; portal?: string; ok?: string }>;
 }) {
   const user = await getSession();
   if (user) redirect(user.role === "CUSTOMER" ? "/portal" : "/dashboard");
-  const { next, portal } = await searchParams;
+  const { next, portal, ok } = await searchParams;
   const s = await getSettings();
 
   return (
@@ -64,7 +64,7 @@ export default async function LoginPage({
               <p className="text-xs text-muted">{portal ? "Customer portal" : s.shopId ? s.tagline : "Sign in to your shop, portal or admin account"}</p>
             </div>
           </div>
-          <LoginForm next={next} portal={Boolean(portal)} />
+          <LoginForm next={next} portal={Boolean(portal)} reset={ok === "1"} />
           {!portal ? <p className="text-sm text-muted mt-5 text-center">New to NexDrive? <Link href="/signup" className="text-accent hover:underline">Start a free 14-day trial</Link></p> : null}
         </div>
       </section>

@@ -1,12 +1,14 @@
 import "server-only";
 import { db, currentShopId } from "./db";
+import { sendEmail, sendSms } from "./mail";
 import type { NotificationChannel } from "@/generated/prisma/enums";
 
 /**
  * Customer notifications. PORTAL notifications are delivered instantly (they show
- * in the customer's portal inbox). EMAIL / SMS are recorded as SENT when a provider
- * is configured, otherwise they stay QUEUED in the outbox so the shop can see what
- * would have gone out. Plug a provider in here (Resend, Twilio, …) when ready.
+ * in the customer's portal inbox). EMAIL / SMS go out through the configured
+ * provider (Resend or SMTP for email, Twilio for SMS — see src/lib/mail.ts) and
+ * stay QUEUED in the outbox when none is configured so the shop can see what
+ * would have gone out.
  */
 export async function queueNotification(opts: {
   customerId: string;
@@ -37,33 +39,7 @@ export async function queueNotification(opts: {
 }
 
 async function deliver(channel: NotificationChannel, customer: { email: string | null; phone: string | null } | null, opts: { subject: string; body: string }) {
-  if (channel === "EMAIL" && process.env.RESEND_API_KEY && customer?.email) {
-    try {
-      const res = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from: process.env.EMAIL_FROM ?? "shop@example.com", to: customer.email, subject: opts.subject, text: opts.body }),
-      });
-      return res.ok;
-    } catch {
-      return false;
-    }
-  }
-  if (channel === "SMS" && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM && customer?.phone) {
-    try {
-      const sid = process.env.TWILIO_ACCOUNT_SID;
-      const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
-        method: "POST",
-        headers: {
-          Authorization: `Basic ${Buffer.from(`${sid}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64")}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: customer.phone, Body: `${opts.subject}: ${opts.body}` }),
-      });
-      return res.ok;
-    } catch {
-      return false;
-    }
-  }
+  if (channel === "EMAIL" && customer?.email) return sendEmail({ to: customer.email, subject: opts.subject, text: opts.body });
+  if (channel === "SMS" && customer?.phone) return sendSms(customer.phone, `${opts.subject}: ${opts.body}`);
   return false;
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Users } from "lucide-react";
+import { Download, Plus, Users } from "lucide-react";
 import { requireStaff } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Badge, Card, EmptyState, Flash, PageHeader } from "@/components/ui";
@@ -43,9 +43,12 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
         title="Customers"
         subtitle={`${total} customer${total === 1 ? "" : "s"}`}
         actions={
-          <Link href="/customers/new" className="btn btn-primary">
-            <Plus size={16} /> New customer
-          </Link>
+          <>
+            <a href="/api/export/customers" className="btn btn-secondary" download><Download size={16} /> Export CSV</a>
+            <Link href="/customers/new" className="btn btn-primary">
+              <Plus size={16} /> New customer
+            </Link>
+          </>
         }
       />
       <Flash searchParams={sp} />

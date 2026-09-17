@@ -63,9 +63,12 @@ Copy `.next/static` to `.next/standalone/.next/static` and `public` to `.next/st
 | `AUTH_SECRET` | yes | signs sessions (32+ random chars); rotating it signs everyone out |
 | `APP_URL` | yes | public base URL used in customer approval links / notifications |
 | `ANTHROPIC_API_KEY` | no | enables NexDrive AI |
-| `RESEND_API_KEY`, `EMAIL_FROM` | no | email delivery (otherwise emails stay queued in the outbox) |
+| `RESEND_API_KEY`, `EMAIL_FROM` | no | email delivery via Resend — notifications and password-reset links (otherwise emails stay queued and reset links are printed to the server log) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE` | no | email delivery via plain SMTP instead of Resend |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | no | SMS delivery |
-| `NEXDRIVE_DISABLE_INTEGRATIONS` | no | `1` skips starting MQTT/pollers (for one-off jobs) |
+| `NEXDRIVE_DISABLE_INTEGRATIONS` | no | `1` skips starting MQTT/pollers and the reminder scheduler (for one-off jobs) |
+
+Card payments (Stripe) are configured per shop under Settings → Payments, not by environment variables — each shop uses its own Stripe account and webhook endpoint `/api/stripe/webhook/{shopId}`.
 
 ## Sizing & operations
 

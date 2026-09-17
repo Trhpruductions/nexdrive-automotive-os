@@ -14,6 +14,7 @@ export const TEMPLATE_EVENTS = [
   { key: "appointment_confirmed", label: "Appointment confirmed", vars: ["customer", "vehicle", "date", "time", "shop"] },
   { key: "invoice_ready", label: "Invoice ready", vars: ["customer", "invoice", "total", "shop"] },
   { key: "payment_received", label: "Payment received", vars: ["customer", "amount", "invoice", "shop"] },
+  { key: "reminder_due", label: "Maintenance reminder due", vars: ["customer", "vehicle", "service", "date", "shop", "phone"] },
 ] as const;
 export type TemplateKey = (typeof TEMPLATE_EVENTS)[number]["key"];
 
@@ -25,6 +26,7 @@ export const DEFAULT_TEMPLATES: Record<TemplateKey, { subject: string; body: str
   appointment_confirmed: { subject: "Appointment confirmed", body: "Hi {customer}, see you {date} at {time} for your {vehicle}. — {shop}" },
   invoice_ready: { subject: "Invoice {invoice}", body: "Hi {customer}, your invoice {invoice} for {total} is ready to view in your portal. — {shop}" },
   payment_received: { subject: "Payment received — thank you", body: "Hi {customer}, we received your payment of {amount} for invoice {invoice}. Thank you! — {shop}" },
+  reminder_due: { subject: "Service reminder: {service}", body: "Hi {customer}, your {vehicle} is due for {service} ({date}). Book online or call {phone} to schedule. — {shop}" },
 };
 
 export type TemplateVars = Partial<Record<"customer" | "vehicle" | "shop" | "phone" | "total" | "link" | "date" | "time" | "service" | "invoice" | "amount", string>>;

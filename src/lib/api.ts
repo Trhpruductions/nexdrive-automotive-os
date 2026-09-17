@@ -91,8 +91,9 @@ export function serialize(value: unknown): unknown {
   if (value instanceof Date) return value.toISOString();
   if (Array.isArray(value)) return value.map(serialize);
   if (typeof value === "object") {
-    const v = value as { toNumber?: () => number; constructor?: { name?: string } };
-    if (typeof v.toNumber === "function" && v.constructor?.name === "Decimal") return v.toNumber();
+    // decimal.js instances (Prisma Decimal) — don't rely on the constructor name, bundlers rename it
+    const v = value as { toNumber?: () => number; toFixed?: unknown; d?: unknown; e?: unknown; s?: unknown };
+    if (typeof v.toNumber === "function" && typeof v.toFixed === "function" && "d" in v && "e" in v && "s" in v) return v.toNumber();
     const out: Record<string, unknown> = {};
     for (const [k, val] of Object.entries(value as Record<string, unknown>)) {
       if (k === "passwordHash" || k === "keyHash" || k === "secret" || k === "approvalToken") continue;

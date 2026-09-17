@@ -29,13 +29,17 @@ export type ShopSettings = {
   approvalMessage: string | null;
   portalWelcome: string | null;
   templates: Record<string, { subject?: string; body?: string }> | null;
+  onlineBooking: boolean;
+  bookingNotes: string | null;
+  /** the shop has entered its own Stripe keys (secrets never leave the server) */
+  stripeConfigured: boolean;
 };
 
 /** Shop settings row (created with defaults on first read). Memoised per request. */
 export const PLATFORM_DEFAULTS: ShopSettings = {
   id: "", shopId: "", name: "NexDrive Automotive OS", tagline: "Complete automotive business management software", phone: null, email: null, address: null, city: null, state: null, zip: null, website: null,
   taxRate: 0, laborRate: 0, shopFeeRate: 0, openTime: "08:00", closeTime: "18:00", invoiceFooter: null, logoUrl: null, accentColor: "#2f7cf6", currency: "USD", timezone: "America/New_York",
-  modules: [...ALL_MODULE_KEYS], approvalMessage: null, portalWelcome: null, templates: null,
+  modules: [...ALL_MODULE_KEYS], approvalMessage: null, portalWelcome: null, templates: null, onlineBooking: false, bookingNotes: null, stripeConfigured: false,
 };
 
 /** Shop settings, memoised per request *per shop* (the root layout may run with no shop context). */
@@ -47,8 +51,10 @@ export async function getSettings(): Promise<ShopSettings> {
 
 const loadSettings = cache(async (shopId: string): Promise<ShopSettings> => {
   const row = (await db.shopSettings.findFirst({ where: { shopId } })) ?? (await db.shopSettings.create({ data: { shopId } }));
+  const { stripeSecretKey, stripeWebhookSecret, ...safe } = row;
   return {
-    ...row,
+    ...safe,
+    stripeConfigured: Boolean(stripeSecretKey && stripeWebhookSecret),
     templates: (row.templates as Record<string, { subject?: string; body?: string }> | null) ?? null,
     taxRate: Number(row.taxRate),
     laborRate: Number(row.laborRate),

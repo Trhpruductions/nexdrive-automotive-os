@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ClipboardList, Plus } from "lucide-react";
+import { ClipboardList, Download, Plus } from "lucide-react";
 import { requireStaff } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
@@ -53,7 +53,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
 
   return (
     <div>
-      <PageHeader title="Work Orders" subtitle={`${total} ${status === "open" ? "open" : status === "all" ? "total" : ""} work order${total === 1 ? "" : "s"}`} actions={<Link href="/work-orders/new" className="btn btn-primary"><Plus size={16} /> New work order</Link>} />
+      <PageHeader title="Work Orders" subtitle={`${total} ${status === "open" ? "open" : status === "all" ? "total" : ""} work order${total === 1 ? "" : "s"}`} actions={<><a href="/api/export/work-orders" className="btn btn-secondary" download><Download size={16} /> Export CSV</a><Link href="/work-orders/new" className="btn btn-primary"><Plus size={16} /> New work order</Link></>} />
       <Flash searchParams={sp} />
 
       <div className="flex gap-1.5 overflow-x-auto pb-3 -mx-1 px-1">

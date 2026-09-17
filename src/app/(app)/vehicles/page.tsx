@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Car, Plus } from "lucide-react";
+import { Car, Download, Plus } from "lucide-react";
 import { requireStaff } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Badge, Card, EmptyState, Flash, PageHeader } from "@/components/ui";
@@ -41,7 +41,7 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <PageHeader title="Vehicles" subtitle={`${total} vehicle${total === 1 ? "" : "s"} on file`} actions={<Link href="/vehicles/new" className="btn btn-primary"><Plus size={16} /> Add vehicle</Link>} />
+      <PageHeader title="Vehicles" subtitle={`${total} vehicle${total === 1 ? "" : "s"} on file`} actions={<><a href="/api/export/vehicles" className="btn btn-secondary" download><Download size={16} /> Export CSV</a><Link href="/vehicles/new" className="btn btn-primary"><Plus size={16} /> Add vehicle</Link></>} />
       <Flash searchParams={sp} />
       <ListFilters action="/vehicles" q={q} placeholder="Search make, model, year, plate, VIN, owner…" />
       <Card padded={false}>

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CreditCard } from "lucide-react";
+import { CreditCard, Download } from "lucide-react";
 import { endOfDay, startOfDay, startOfMonth, subDays } from "date-fns";
 import { requireStaff, BILLING_ROLES } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -28,7 +28,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <PageHeader title="Payments" subtitle="Every payment collected, newest first." />
+      <PageHeader title="Payments" subtitle="Every payment collected, newest first." actions={<a href="/api/export/payments" className="btn btn-secondary" download><Download size={16} /> Export CSV</a>} />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
         <KpiCard label="Today" value={money(today._sum.amount ?? 0)} icon={CircleDollarSign} tone="green" />
         <KpiCard label="Last 7 days" value={money(week._sum.amount ?? 0)} icon={CalendarDays} />

@@ -84,6 +84,11 @@ Around that core:
 - **Printable inspection reports** — every inspection has a print view (`/inspections/{id}/print`) and the customer sees the same report in the portal.
 - **Notification templates** — Settings → Notification templates edits the wording of every customer message (estimate ready, vehicle ready, waiting on parts, appointment booked/confirmed, invoice ready, payment received) with `{customer} {vehicle} {shop} {total} {link} {date} {time} …` placeholders.
 - **Reports** — collected vs prior period, revenue mix, monthly trend, payments by method, technician performance, AR aging with the oldest open invoices, sales tax by month, parts sales & margin by category, and customer retention.
+- **Online booking** — every shop gets a public page at `/book/{slug}` (link under Settings → Business). Customers book without an account; the request lands in Schedule and Messages for the shop to confirm, and the customer + vehicle are created or matched automatically.
+- **Card payments** — a shop enters its own Stripe keys under Settings → Payments and customers pay invoice balances from the portal. The webhook records the payment, marks the invoice paid and fires the usual `payment.recorded` / `invoice.paid` webhooks.
+- **Maintenance reminders** — due (within 14 days / 500 miles) reminders go out automatically every hour through the `reminder_due` template, once each; Settings → Notification templates has a "send now" button.
+- **CSV exports** — customers, vehicles, work orders, invoices, payments and parts (`/api/export/{entity}`, optional `?from=&to=`), from the Export button on each list.
+- **Accounts** — forgot-password with one-hour single-use links (email via Resend or SMTP), change-your-own-password under My account / portal account, and sign-in lockout after 10 failed attempts per email + IP.
 
 ## Production lines & inventory feeds
 

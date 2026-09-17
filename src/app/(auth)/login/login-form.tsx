@@ -1,10 +1,11 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 import { LogIn } from "lucide-react";
 import { login } from "@/actions/auth";
 
-export function LoginForm({ next, portal }: { next?: string; portal: boolean }) {
+export function LoginForm({ next, portal, reset }: { next?: string; portal: boolean; reset?: boolean }) {
   const [state, action, pending] = useActionState(login, undefined);
 
   return (
@@ -16,12 +17,13 @@ export function LoginForm({ next, portal }: { next?: string; portal: boolean }) 
         </p>
       </div>
       {next ? <input type="hidden" name="next" value={next} /> : null}
+      {reset ? <p className="text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">Password updated. Sign in with your new password.</p> : null}
       <div>
         <label className="label" htmlFor="email">Email</label>
         <input id="email" name="email" type="email" autoComplete="email" required className="input" placeholder="you@shop.com" />
       </div>
       <div>
-        <label className="label" htmlFor="password">Password</label>
+        <div className="flex items-baseline justify-between"><label className="label" htmlFor="password">Password</label><Link href="/forgot-password" className="text-xs text-muted hover:text-accent">Forgot password?</Link></div>
         <input id="password" name="password" type="password" autoComplete="current-password" required className="input" placeholder="••••••••" />
       </div>
       {state?.error ? (

@@ -57,6 +57,8 @@ export async function saveBusiness(formData: FormData) {
       zip: opt(formData.get("zip")),
       timezone: String(formData.get("timezone") ?? "America/New_York"),
       currency: String(formData.get("currency") ?? "USD"),
+      onlineBooking: formData.has("onlineBooking"),
+      bookingNotes: opt(formData.get("bookingNotes")),
     },
   });
   revalidateAll();
@@ -182,6 +184,45 @@ export async function saveTemplates(formData: FormData) {
   if (!Object.keys(templates).length) await db.shopSettings.update({ where: { shopId: await currentShopId() }, data: { templates: {} } });
   revalidateAll();
   back("templates", "Templates saved");
+}
+
+export async function runRemindersNow() {
+  await requireStaff(MANAGER_ROLES);
+  const { sendDueReminders } = await import("@/lib/reminders");
+  const n = await sendDueReminders(await currentShopId());
+  revalidateAll();
+  back("templates", n ? `${n} reminder${n === 1 ? "" : "s"} sent` : "No reminders are due right now");
+}
+
+// ───────── Payments (Stripe) ─────────
+export async function savePayments(formData: FormData) {
+  await requireStaff(MANAGER_ROLES);
+  const shopId = await currentShopId();
+  if (formData.get("remove") === "1") {
+    await db.shopSettings.update({ where: { shopId }, data: { stripeSecretKey: null, stripeWebhookSecret: null } });
+    revalidateAll();
+    back("payments", "Card payments turned off");
+  }
+  const secret = String(formData.get("stripeSecretKey") ?? "").trim();
+  const whsec = String(formData.get("stripeWebhookSecret") ?? "").trim();
+  if (secret && !/^(sk|rk)_(live|test)_/.test(secret)) back("payments", "That doesn't look like a Stripe secret key (sk_live_… / sk_test_…)", true);
+  if (whsec && !whsec.startsWith("whsec_")) back("payments", "The webhook signing secret starts with whsec_", true);
+  const data: { stripeSecretKey?: string; stripeWebhookSecret?: string } = {};
+  if (secret) {
+    const { testStripeKey } = await import("@/lib/stripe");
+    try {
+      await testStripeKey(secret);
+    } catch (e) {
+      back("payments", `Stripe rejected the key: ${e instanceof Error ? e.message : "unknown error"}`, true);
+    }
+    data.stripeSecretKey = secret;
+  }
+  if (whsec) data.stripeWebhookSecret = whsec;
+  if (!Object.keys(data).length) back("payments", "Nothing to save", true);
+  await db.shopSettings.update({ where: { shopId }, data });
+  const row = await db.shopSettings.findUnique({ where: { shopId }, select: { stripeSecretKey: true, stripeWebhookSecret: true } });
+  revalidateAll();
+  back("payments", row?.stripeSecretKey && row?.stripeWebhookSecret ? "Stripe connected — card payments are on in the portal" : "Saved. Add the other key to turn card payments on.");
 }
 
 // ───────── Users ─────────

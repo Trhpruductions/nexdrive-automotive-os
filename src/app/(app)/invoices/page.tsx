@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Receipt } from "lucide-react";
+import { Download, Receipt } from "lucide-react";
 import { requireStaff, BILLING_ROLES } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Badge, Card, EmptyState, Flash, KpiCard, PageHeader } from "@/components/ui";
@@ -34,7 +34,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <PageHeader title="Invoices" subtitle="Billing, taxes and receipts. Invoices are created from completed work orders." />
+      <PageHeader title="Invoices" subtitle="Billing, taxes and receipts. Invoices are created from completed work orders." actions={<a href="/api/export/invoices" className="btn btn-secondary" download><Download size={16} /> Export CSV</a>} />
       <Flash searchParams={sp} />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
         <KpiCard label="Outstanding" value={money(outstanding)} hint={`${open.length} open invoice${open.length === 1 ? "" : "s"}`} icon={Clock} tone="amber" href="/invoices?status=open" />

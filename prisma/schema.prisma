@@ -108,11 +108,26 @@ model User {
   technician Technician?
   auditLogs  AuditLog[]
   aiMessages AiMessage[]
+  passwordResets PasswordResetToken[]
 
   shop   Shop?   @relation(fields: [shopId], references: [id], onDelete: Cascade)
   shopId String?
 
   @@index([shopId])
+}
+
+/** One-time password reset links (token stored hashed). */
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  @@index([userId])
 }
 
 model Technician {
@@ -247,6 +262,7 @@ model MaintenanceReminder {
   dueAtMileage Int?
   dueAtDate    DateTime?
   completed    Boolean   @default(false)
+  notifiedAt   DateTime?
   createdAt    DateTime  @default(now())
 
   vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
@@ -621,6 +637,12 @@ model ShopSettings {
   portalWelcome   String?
   // Notification templates keyed by event (see src/lib/templates.ts); null = built-in defaults
   templates       Json?
+  // Public online booking page (/book/{slug})
+  onlineBooking   Boolean  @default(true)
+  bookingNotes    String?
+  // Card payments in the customer portal: the shop's own Stripe account
+  stripeSecretKey     String?
+  stripeWebhookSecret String?
 }
 
 // Shop-defined inspection checklist (used to build every new inspection)

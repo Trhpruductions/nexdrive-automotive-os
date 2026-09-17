@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, ClipboardList, Package, Plus, ScanBarcode, Truck } from "lucide-react";
+import { AlertTriangle, ClipboardList, Download, Package, Plus, ScanBarcode, Truck } from "lucide-react";
 import { requireStaff } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Badge, Card, EmptyState, Flash, KpiCard, PageHeader } from "@/components/ui";
@@ -38,6 +38,7 @@ export default async function PartsPage({ searchParams }: { searchParams: Promis
         subtitle={`${all.length} SKU${all.length === 1 ? "" : "s"} · ${num(all.reduce((s, p) => s + p.quantityOnHand, 0))} units on hand`}
         actions={
           <>
+            <a href="/api/export/parts" className="btn btn-secondary" download><Download size={16} /> Export CSV</a>
             <Link href="/parts/orders" className="btn btn-secondary"><ClipboardList size={16} /> Purchase orders</Link>
             <Link href="/parts/suppliers" className="btn btn-secondary"><Truck size={16} /> Suppliers</Link>
             <Link href="/parts/scan" className="btn btn-secondary"><ScanBarcode size={16} /> Scan</Link>

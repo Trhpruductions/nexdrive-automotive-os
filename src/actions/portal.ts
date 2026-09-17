@@ -5,7 +5,27 @@ import { revalidatePath } from "next/cache";
 import { addMinutes, format } from "date-fns";
 import { db, currentShopId } from "@/lib/db";
 import { requireCustomer } from "@/lib/auth";
+import { headers } from "next/headers";
 import { queueNotification } from "@/lib/notify";
+import { createCheckoutSession } from "@/lib/stripe";
+
+/** Customer pays an invoice balance by card through the shop's Stripe account. */
+export async function startCardPayment(invoiceId: string) {
+  const user = await requireCustomer();
+  const inv = await db.invoice.findUnique({ where: { id: invoiceId }, include: { customer: { select: { email: true } } } });
+  if (!inv || inv.customerId !== user.customerId) redirect("/portal");
+  const balance = Math.round((Number(inv.total) - Number(inv.amountPaid)) * 100) / 100;
+  if (inv.status === "VOID" || balance <= 0) redirect(`/portal/invoices/${invoiceId}`);
+  const h = await headers();
+  const base = process.env.APP_URL?.replace(/\/$/, "") ?? `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}`;
+  let url: string;
+  try {
+    url = await createCheckoutSession({ shopId: user.activeShopId, invoiceId, invoiceNumber: inv.number, amount: balance, customerEmail: inv.customer.email, successUrl: `${base}/portal/invoices/${invoiceId}?paid=1`, cancelUrl: `${base}/portal/invoices/${invoiceId}?cancelled=1` });
+  } catch (e) {
+    redirect(`/portal/invoices/${invoiceId}?error=${encodeURIComponent(e instanceof Error ? e.message : "Could not start payment")}`);
+  }
+  redirect(url);
+}
 
 /** Customer requests an appointment from the portal; the shop confirms it in Schedule. */
 export async function requestAppointment(formData: FormData) {

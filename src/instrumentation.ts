@@ -5,4 +5,6 @@ export async function register() {
   if (process.env.NEXDRIVE_DISABLE_INTEGRATIONS === "1") return;
   const { startIntegrationRuntime } = await import("./lib/integrations/runtime");
   await startIntegrationRuntime();
+  const { startReminderScheduler } = await import("./lib/reminders");
+  startReminderScheduler();
 }
