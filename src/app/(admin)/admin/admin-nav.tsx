@@ -8,6 +8,7 @@ export function AdminNav() {
   const items = [
     { href: "/admin", label: "Shops", active: p === "/admin" || p.startsWith("/admin/shops") },
     { href: "/admin/leads", label: "Leads", active: p.startsWith("/admin/leads") },
+    { href: "/admin/ops", label: "Ops", active: p.startsWith("/admin/ops") },
   ];
   return (
     <nav className="flex items-center gap-1 ml-4">

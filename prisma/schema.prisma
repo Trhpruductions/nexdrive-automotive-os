@@ -105,6 +105,8 @@ model User {
   name         String
   role         Role     @default(TECHNICIAN)
   active       Boolean  @default(true)
+  // bumped on password change / "sign out everywhere": sessions carrying an older value are rejected
+  sessionVersion Int    @default(1)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -138,6 +140,19 @@ model ShopMember {
 
   @@unique([userId, shopId])
   @@index([shopId])
+}
+
+/** Scheduler run history (reminders, digests, outbox, trials) for the admin Ops page. */
+model JobRun {
+  id         String   @id @default(cuid())
+  name       String
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
+  ok         Boolean  @default(true)
+  count      Int      @default(0)
+  detail     String?
+
+  @@index([name, startedAt])
 }
 
 /** One-time password reset links (token stored hashed). */
@@ -292,6 +307,8 @@ model MaintenanceReminder {
 
   vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   vehicleId String
+
+  @@index([completed, notifiedAt])
 }
 
 // ============================ Scheduling ============================
@@ -333,6 +350,7 @@ model Appointment {
   shopId String
 
   @@index([scheduledStart])
+  @@index([status, reminderSentAt, scheduledStart])
   @@index([shopId])
 }
 
@@ -635,6 +653,7 @@ model Notification {
   shopId String
 
   @@index([customerId, createdAt])
+  @@index([status, channel, createdAt])
   @@index([shopId])
 }
 

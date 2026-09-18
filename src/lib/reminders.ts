@@ -51,15 +51,18 @@ let timer: NodeJS.Timeout | null = null;
 export function startReminderScheduler() {
   if (timer) return;
   const run = async () => {
-    await sendDueReminders().catch((e) => console.error("[nexdrive] reminder run failed", e));
+    // every job is logged to JobRun (admin → Ops) and alerts on failure
+    const { runJob, pruneJobRuns } = await import("./ops");
     const { sendAppointmentReminders, sendDailyDigests, sendEstimateFollowUps } = await import("./digest");
-    await sendEstimateFollowUps().then((n) => n && console.log(`[nexdrive] ${n} estimate follow-up(s) sent`)).catch((e) => console.error("[nexdrive] estimate follow-ups failed", e));
-    await sendAppointmentReminders().then((n) => n && console.log(`[nexdrive] ${n} appointment reminder(s) sent`)).catch((e) => console.error("[nexdrive] appointment reminders failed", e));
-    await sendDailyDigests().then((n) => n && console.log(`[nexdrive] ${n} daily digest(s) sent`)).catch((e) => console.error("[nexdrive] daily digest failed", e));
     const { flushOutbox } = await import("./notify");
-    await flushOutbox().then((n) => n && console.log(`[nexdrive] outbox: ${n} queued notification(s) sent`)).catch((e) => console.error("[nexdrive] outbox flush failed", e));
     const { expireTrials } = await import("./billing");
-    await expireTrials().then((n) => n && console.log(`[nexdrive] ${n} expired trial(s) suspended`)).catch((e) => console.error("[nexdrive] trial expiry failed", e));
+    await runJob("maintenance reminders", () => sendDueReminders());
+    await runJob("estimate follow-ups", () => sendEstimateFollowUps());
+    await runJob("appointment reminders", () => sendAppointmentReminders());
+    await runJob("daily digests", () => sendDailyDigests());
+    await runJob("outbox flush", () => flushOutbox());
+    await runJob("trial expiry", () => expireTrials());
+    await pruneJobRuns().catch(() => null);
   };
   timer = setInterval(run, 60 * 60 * 1000);
   timer.unref?.();

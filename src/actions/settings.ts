@@ -303,6 +303,7 @@ export async function updateUser(id: string, formData: FormData) {
   if (password) {
     if (password.length < 8) back("users", "Password must be at least 8 characters", true);
     data.passwordHash = await hashPassword(password);
+    data.sessionVersion = { increment: 1 }; // a new password signs that person out everywhere
   }
   await db.user.update({ where: { id }, data });
   back("users", "User updated");

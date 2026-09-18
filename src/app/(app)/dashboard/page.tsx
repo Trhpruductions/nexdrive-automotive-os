@@ -11,6 +11,7 @@ import { computeTotals } from "@/lib/money";
 import { fmtDay, greeting, money, vehicleName, woNumber } from "@/lib/format";
 import { format } from "date-fns";
 import { TechDashboard } from "./tech-dashboard";
+import { OnboardingChecklist } from "@/components/app/onboarding";
 import { Flash } from "@/components/ui";
 
 export const metadata = { title: "Dashboard" };
@@ -35,12 +36,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   return (
     <div className="space-y-5">
       {sp.denied ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-300">You don&apos;t have access to that page.</div> : null}
-      {sp.welcome ? (
-        <div className="card p-5 border-accent/40 bg-accent-soft">
-          <div className="font-semibold">Welcome to NexDrive — {settings.name} is ready.</div>
-          <p className="text-sm text-muted mt-1">Suggested first steps: set your rates, tax and hours in <Link href="/settings?tab=rates" className="text-accent">Settings → Rates</Link>, add your logo under <Link href="/settings?tab=branding" className="text-accent">Branding</Link>, add technicians and bays, then create your first <Link href="/work-orders/new" className="text-accent">work order</Link>. Your 14-day trial includes every module.</p>
-        </div>
-      ) : null}
+      <OnboardingChecklist settings={settings} role={user.role} />
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
           {greeting()}, {user.name}

@@ -117,7 +117,7 @@ export async function adminResetOwnerPassword(id: string, formData: FormData) {
   const owner = await rawDb.user.findFirst({ where: { shopId: id, role: "OWNER" }, orderBy: { createdAt: "asc" } });
   if (!owner) return back("This shop has no owner login", true);
   const { hashPassword } = await import("@/lib/auth");
-  await rawDb.user.update({ where: { id: owner.id }, data: { passwordHash: await hashPassword(password), active: true } });
+  await rawDb.user.update({ where: { id: owner.id }, data: { passwordHash: await hashPassword(password), active: true, sessionVersion: { increment: 1 } } });
   back(`Password reset for ${owner.email}`);
 }
 

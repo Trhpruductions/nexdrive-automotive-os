@@ -115,6 +115,9 @@ Around that core:
 - **Part labels** — printable Code 128 bin labels (Avery 5160 layout) from any part; they scan on the Parts → Scan page.
 - **Portal self-service** — customers keep their own email, phone and address current under *My account*.
 - API keys are rate-limited to 600 requests/minute (HTTP 429 with a retry hint).
+- **Sessions you can revoke** — changing or resetting a password (or *Sign out other devices* under My account) invalidates every other session for that login; admin password resets do the same.
+- **Ops** — the admin console's Ops page shows every scheduled job's last run and failures, the outbox queue, feeds with errors, webhook failures and which providers are configured; set `OPS_WEBHOOK_URL` (Slack/Discord) to be alerted on job failures and unhandled request errors.
+- **Onboarding checklist** — new shops see a ten-step setup checklist on the dashboard for their first three weeks.
 
 ## Production lines & inventory feeds
 

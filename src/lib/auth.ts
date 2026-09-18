@@ -42,8 +42,9 @@ export async function verifyPassword(plain: string, hash: string) {
   return bcrypt.compare(plain, hash);
 }
 
-export async function createSession(user: { id: string; role: Role; shopId: string | null }) {
-  const token = await new SignJWT({ sub: user.id, role: user.role, shop: user.shopId })
+export async function createSession(user: { id: string; role: Role; shopId: string | null; sessionVersion?: number }) {
+  const v = user.sessionVersion ?? (await rawDb.user.findUnique({ where: { id: user.id }, select: { sessionVersion: true } }))?.sessionVersion ?? 1;
+  const token = await new SignJWT({ sub: user.id, role: user.role, shop: user.shopId, v })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${SESSION_DAYS}d`)
@@ -78,7 +79,7 @@ export async function readSessionToken(token: string | undefined) {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secret());
-    return typeof payload.sub === "string" ? { userId: payload.sub, role: payload.role as Role, shopId: (payload.shop as string | null) ?? null } : null;
+    return typeof payload.sub === "string" ? { userId: payload.sub, role: payload.role as Role, shopId: (payload.shop as string | null) ?? null, v: typeof payload.v === "number" ? payload.v : 1 } : null;
   } catch {
     return null;
   }
@@ -91,9 +92,11 @@ export const getSession = cache(async (): Promise<SessionUser | null> => {
   if (!claims) return null;
   const user = await rawDb.user.findUnique({
     where: { id: claims.userId },
-    select: { id: true, email: true, name: true, role: true, active: true, shopId: true, customerId: true, technician: { select: { id: true } }, shop: { select: { status: true } } },
+    select: { id: true, email: true, name: true, role: true, active: true, shopId: true, sessionVersion: true, customerId: true, technician: { select: { id: true } }, shop: { select: { status: true } } },
   });
   if (!user || !user.active) return null;
+  // a password change / "sign out everywhere" bumps the version; older cookies are dead
+  if (claims.v !== user.sessionVersion) return null;
   let activeShopId = user.shopId;
   let shopStatus: ShopStatus | null = user.shop?.status ?? null;
   let role = user.role;

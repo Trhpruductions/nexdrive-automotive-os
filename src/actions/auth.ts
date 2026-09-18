@@ -52,6 +52,16 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   redirect(next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard");
 }
 
+/** Kill every other session for this account (this device is re-issued). */
+export async function signOutEverywhere() {
+  const me = await getSession();
+  if (!me) redirect("/login");
+  const updated = await rawDb.user.update({ where: { id: me.id }, data: { sessionVersion: { increment: 1 } } });
+  await createSession({ id: me.id, role: me.role, shopId: me.activeShopId, sessionVersion: updated.sessionVersion });
+  await rawDb.auditLog.create({ data: { userId: me.id, shopId: me.shopId, action: "sign_out_everywhere", entity: "User", entityId: me.id } });
+  redirect(me.role === "CUSTOMER" ? "/portal/account?ok=Other+devices+signed+out" : "/account?ok=Other+devices+signed+out");
+}
+
 export async function logout() {
   await destroySession();
   redirect("/login");
@@ -98,7 +108,7 @@ export async function resetPassword(_prev: MessageState, formData: FormData): Pr
   const row = await rawDb.passwordResetToken.findUnique({ where: { tokenHash: sha256(token) }, include: { user: true } });
   if (!row || row.usedAt || row.expiresAt < new Date()) return { error: "This reset link has expired or was already used. Request a new one." };
   await rawDb.$transaction([
-    rawDb.user.update({ where: { id: row.userId }, data: { passwordHash: await hashPassword(password) } }),
+    rawDb.user.update({ where: { id: row.userId }, data: { passwordHash: await hashPassword(password), sessionVersion: { increment: 1 } } }),
     rawDb.passwordResetToken.update({ where: { id: row.id }, data: { usedAt: new Date() } }),
     rawDb.passwordResetToken.deleteMany({ where: { userId: row.userId, id: { not: row.id } } }),
     rawDb.auditLog.create({ data: { userId: row.userId, shopId: row.user.shopId, action: "password_reset", entity: "User", entityId: row.userId } }),
@@ -117,7 +127,8 @@ export async function changePassword(_prev: MessageState, formData: FormData): P
   if (password !== confirm) return { error: "Passwords don't match" };
   const user = await rawDb.user.findUniqueOrThrow({ where: { id: me.id } });
   if (!(await verifyPassword(current, user.passwordHash))) return { error: "Current password is incorrect" };
-  await rawDb.user.update({ where: { id: me.id }, data: { passwordHash: await hashPassword(password) } });
+  const updated = await rawDb.user.update({ where: { id: me.id }, data: { passwordHash: await hashPassword(password), sessionVersion: { increment: 1 } } });
+  await createSession({ id: me.id, role: me.role, shopId: me.activeShopId, sessionVersion: updated.sessionVersion });
   await rawDb.auditLog.create({ data: { userId: me.id, shopId: user.shopId, action: "password_change", entity: "User", entityId: me.id } });
-  return { ok: "Password updated" };
+  return { ok: "Password updated — every other device has been signed out" };
 }
