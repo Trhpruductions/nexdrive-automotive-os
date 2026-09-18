@@ -1,6 +1,7 @@
 import "server-only";
-import { db, currentShopId } from "./db";
-import { sendEmail, sendSms } from "./mail";
+import { subDays } from "date-fns";
+import { db, rawDb, withShop, currentShopId } from "./db";
+import { mailConfigured, sendEmail, sendSms, smsConfigured } from "./mail";
 import type { NotificationChannel } from "@/generated/prisma/enums";
 
 /**
@@ -36,6 +37,28 @@ export async function queueNotification(opts: {
       },
     });
   }
+}
+
+/**
+ * Re-sends queued email / SMS (e.g. after a provider was configured). Runs
+ * hourly from the scheduler and from the "Retry queued" button. Returns sent count.
+ */
+export async function flushOutbox(onlyShopId?: string) {
+  const channels: NotificationChannel[] = [...(mailConfigured() ? (["EMAIL"] as const) : []), ...(smsConfigured() ? (["SMS"] as const) : [])];
+  if (!channels.length) return 0;
+  const rows = await rawDb.notification.findMany({
+    where: { status: "QUEUED", channel: { in: channels }, createdAt: { gte: subDays(new Date(), 7) }, ...(onlyShopId ? { shopId: onlyShopId } : {}) },
+    include: { customer: { select: { email: true, phone: true } } },
+    orderBy: { createdAt: "asc" },
+    take: 200,
+  });
+  let sent = 0;
+  for (const n of rows) {
+    const ok = await withShop(n.shopId, () => deliver(n.channel, n.customer, n));
+    await rawDb.notification.update({ where: { id: n.id }, data: ok ? { status: "SENT", sentAt: new Date() } : { status: "FAILED" } });
+    if (ok) sent++;
+  }
+  return sent;
 }
 
 async function deliver(channel: NotificationChannel, customer: { email: string | null; phone: string | null } | null, opts: { subject: string; body: string }) {

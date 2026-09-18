@@ -3,7 +3,7 @@ import { jwtVerify } from "jose";
 
 // Optimistic auth gate: pages re-check the session against the database.
 const SESSION_COOKIE = "nd_session";
-const PUBLIC = ["/login", "/signup", "/forgot-password", "/reset-password", "/book", "/api/stripe", "/suspended", "/approve", "/pricing", "/contact", "/terms", "/privacy", "/api/files", "/api/ingest", "/api/v1", "/api/health", "/brand", "/marketing", "/icon.png"];
+const PUBLIC = ["/login", "/signup", "/forgot-password", "/reset-password", "/book", "/pay", "/api/stripe", "/suspended", "/approve", "/pricing", "/contact", "/terms", "/privacy", "/api/files", "/api/ingest", "/api/v1", "/api/health", "/brand", "/marketing", "/icon.png", "/manifest.webmanifest"];
 
 async function userIdFromCookie(token: string | undefined) {
   if (!token || !process.env.AUTH_SECRET) return null;

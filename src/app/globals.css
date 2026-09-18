@@ -189,6 +189,14 @@ body {
   border-collapse: collapse;
   font-size: 0.85rem;
 }
+/* Whatever directly holds a table scrolls sideways on narrow screens instead of breaking the page */
+:where(*):has(> .table) {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+@media (max-width: 640px) {
+  .table { min-width: 520px; }
+}
 .table th {
   text-align: left;
   font-size: 0.68rem;

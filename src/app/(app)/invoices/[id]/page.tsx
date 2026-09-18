@@ -10,6 +10,8 @@ import { InvoiceSheet } from "@/components/app/invoice-sheet";
 import { recordPayment, resendInvoice, updateInvoiceNotes, voidInvoice } from "@/actions/invoices";
 import { INVOICE_STATUS, PAYMENT_METHODS } from "@/lib/constants";
 import { fmtDateTime, invNumber, money, toDateInput, woNumber } from "@/lib/format";
+import { CopyField } from "@/app/(app)/settings/copy-field";
+import { publicBase } from "@/lib/templates";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -26,6 +28,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   if (!inv) notFound();
   const balance = Number(inv.total) - Number(inv.amountPaid);
   const st = INVOICE_STATUS[inv.status];
+  const payLink = inv.payToken ? `${await publicBase()}/pay/${inv.payToken}` : null;
 
   return (
     <div>
@@ -47,6 +50,12 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
           <InvoiceSheet kind="INVOICE" settings={settings} number={inv.number} workOrderNumber={inv.workOrder.number} date={inv.issuedAt} dueAt={inv.dueAt} customer={inv.customer} vehicle={inv.workOrder.vehicle} lines={inv.workOrder.lines} complaint={inv.workOrder.complaint} diagnosis={inv.workOrder.diagnosis} mileageIn={inv.workOrder.mileageIn} amountPaid={Number(inv.amountPaid)} notes={inv.notes} />
         </div>
         <div className="space-y-4">
+          {payLink && inv.status !== "VOID" ? (
+            <Card title="Customer pay link">
+              <p className="text-xs text-muted">Text or email this link — the customer can view the invoice{settings.stripeConfigured ? " and pay by card" : ""} without signing in.</p>
+              <CopyField value={payLink} />
+            </Card>
+          ) : null}
           <Card title="Record payment">
             {inv.status === "VOID" ? (
               <p className="text-sm text-muted">This invoice is void.</p>

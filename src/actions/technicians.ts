@@ -63,6 +63,37 @@ export async function updateTechnician(id: string, _prev: FormState, formData: F
   redirect(`/technicians/${id}?ok=Saved`);
 }
 
+/** Technician dashboard: clock in/out on a job and stay on the dashboard. */
+export async function clockFromDashboard(technicianId: string, workOrderId: string) {
+  const user = await requireStaff();
+  if (user.role === "TECHNICIAN" && user.technicianId !== technicianId) redirect("/dashboard?denied=1");
+  const open = await db.timeEntry.findFirst({ where: { technicianId, endedAt: null } });
+  if (open) await db.timeEntry.update({ where: { id: open.id }, data: { endedAt: new Date() } });
+  else await db.timeEntry.create({ data: { technicianId, workOrderId } });
+  revalidatePath("/dashboard");
+  revalidatePath(`/work-orders/${workOrderId}`);
+  redirect(`/dashboard?ok=${open ? "Clocked+out" : "Clocked+in"}`);
+}
+
+/** Technician dashboard "Start": moves the job to In Progress (which opens the clock) or just clocks in if it already is. */
+export async function startJobFromDashboard(workOrderId: string) {
+  const user = await requireStaff();
+  const wo = await db.workOrder.findUniqueOrThrow({ where: { id: workOrderId } });
+  if (user.role === "TECHNICIAN" && wo.technicianId !== user.technicianId) redirect("/dashboard?denied=1");
+  const techId = wo.technicianId ?? user.technicianId;
+  if (!techId) redirect(`/work-orders/${workOrderId}?error=Assign+a+technician+first`);
+  // close any other open clock for this tech, then open one on this job
+  await db.timeEntry.updateMany({ where: { technicianId: techId, endedAt: null, workOrderId: { not: workOrderId } }, data: { endedAt: new Date() } });
+  if (wo.status === "APPROVED" || wo.status === "ON_HOLD") {
+    const { setWorkOrderStatus } = await import("./workorders");
+    await setWorkOrderStatus(workOrderId, "IN_PROGRESS"); // redirects to the work order
+  }
+  const open = await db.timeEntry.findFirst({ where: { technicianId: techId, workOrderId, endedAt: null } });
+  if (!open) await db.timeEntry.create({ data: { technicianId: techId, workOrderId } });
+  revalidatePath("/dashboard");
+  redirect(`/work-orders/${workOrderId}?ok=Clocked+in`);
+}
+
 export async function clockTech(technicianId: string, workOrderId: string, formData: FormData) {
   await requireStaff();
   const open = await db.timeEntry.findFirst({ where: { technicianId, endedAt: null } });

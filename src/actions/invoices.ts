@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { db, currentShopId } from "@/lib/db";
 import { requireStaff, BILLING_ROLES } from "@/lib/auth";
 import { queueNotification } from "@/lib/notify";
-import { renderTemplate } from "@/lib/templates";
+import { publicBase, renderTemplate } from "@/lib/templates";
+import { randomBytes } from "node:crypto";
 import { round2 } from "@/lib/money";
 import { applyPayment } from "@/lib/payments";
 import type { PaymentMethod } from "@/generated/prisma/enums";
@@ -51,9 +52,10 @@ export async function updateInvoiceNotes(invoiceId: string, formData: FormData) 
 
 export async function resendInvoice(invoiceId: string) {
   await requireStaff(BILLING_ROLES);
-  const inv = await db.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
+  let inv = await db.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
+  if (!inv.payToken) inv = await db.invoice.update({ where: { id: invoiceId }, data: { payToken: randomBytes(18).toString("base64url") } });
   const c = await db.customer.findUnique({ where: { id: inv.customerId }, select: { firstName: true } });
-  const t = await renderTemplate("invoice_ready", { customer: c?.firstName ?? "", invoice: `INV-${String(inv.number).padStart(5, "0")}`, total: `$${Number(inv.total).toFixed(2)}` });
+  const t = await renderTemplate("invoice_ready", { customer: c?.firstName ?? "", invoice: `INV-${String(inv.number).padStart(5, "0")}`, total: `$${Number(inv.total).toFixed(2)}`, link: `${await publicBase()}/pay/${inv.payToken}` });
   await queueNotification({ customerId: inv.customerId, workOrderId: inv.workOrderId, ...t });
   revalidatePath(`/invoices/${invoiceId}`);
   redirect(`/invoices/${invoiceId}?ok=Invoice+sent`);

@@ -12,7 +12,7 @@ export const TEMPLATE_EVENTS = [
   { key: "waiting_parts", label: "Waiting on parts", vars: ["customer", "vehicle", "shop"] },
   { key: "appointment_booked", label: "Appointment booked", vars: ["customer", "vehicle", "date", "time", "service", "shop"] },
   { key: "appointment_confirmed", label: "Appointment confirmed", vars: ["customer", "vehicle", "date", "time", "shop"] },
-  { key: "invoice_ready", label: "Invoice ready", vars: ["customer", "invoice", "total", "shop"] },
+  { key: "invoice_ready", label: "Invoice ready", vars: ["customer", "invoice", "total", "link", "shop"] },
   { key: "payment_received", label: "Payment received", vars: ["customer", "amount", "invoice", "shop"] },
   { key: "reminder_due", label: "Maintenance reminder due", vars: ["customer", "vehicle", "service", "date", "shop", "phone"] },
 ] as const;
@@ -24,10 +24,22 @@ export const DEFAULT_TEMPLATES: Record<TemplateKey, { subject: string; body: str
   waiting_parts: { subject: "Waiting on parts", body: "Hi {customer}, we're waiting on parts for your {vehicle}. We'll update you as soon as they arrive. — {shop}" },
   appointment_booked: { subject: "Appointment booked", body: "Hi {customer}, your {vehicle} is booked for {date} at {time} — {service}. See you then! — {shop}" },
   appointment_confirmed: { subject: "Appointment confirmed", body: "Hi {customer}, see you {date} at {time} for your {vehicle}. — {shop}" },
-  invoice_ready: { subject: "Invoice {invoice}", body: "Hi {customer}, your invoice {invoice} for {total} is ready to view in your portal. — {shop}" },
+  invoice_ready: { subject: "Invoice {invoice}", body: "Hi {customer}, your invoice {invoice} for {total} is ready. View and pay here: {link} — {shop}" },
   payment_received: { subject: "Payment received — thank you", body: "Hi {customer}, we received your payment of {amount} for invoice {invoice}. Thank you! — {shop}" },
   reminder_due: { subject: "Service reminder: {service}", body: "Hi {customer}, your {vehicle} is due for {service} ({date}). Book online or call {phone} to schedule. — {shop}" },
 };
+
+/** Public base URL for links in messages (APP_URL in production). */
+export async function publicBase() {
+  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
+  const { headers } = await import("next/headers");
+  try {
+    const h = await headers();
+    return `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host") ?? "localhost:4500"}`;
+  } catch {
+    return "http://localhost:4500";
+  }
+}
 
 export type TemplateVars = Partial<Record<"customer" | "vehicle" | "shop" | "phone" | "total" | "link" | "date" | "time" | "service" | "invoice" | "amount", string>>;
 

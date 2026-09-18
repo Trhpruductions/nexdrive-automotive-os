@@ -10,13 +10,24 @@ import { WO_STATUS } from "@/lib/constants";
 import { computeTotals } from "@/lib/money";
 import { fmtDay, greeting, money, vehicleName, woNumber } from "@/lib/format";
 import { format } from "date-fns";
+import { TechDashboard } from "./tech-dashboard";
+import { Flash } from "@/components/ui";
 
 export const metadata = { title: "Dashboard" };
 
-export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ range?: string; denied?: string; welcome?: string }> }) {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ range?: string; denied?: string; welcome?: string; ok?: string; error?: string }> }) {
   const user = await requireStaff();
   const settings = await getSettings();
   const sp = await searchParams;
+  if (user.role === "TECHNICIAN" && user.technicianId) {
+    return (
+      <div>
+        <Flash searchParams={sp} />
+        {sp.denied ? <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-300">You don&apos;t have access to that page.</div> : null}
+        <TechDashboard technicianId={user.technicianId} userName={user.name} />
+      </div>
+    );
+  }
   const range: Range = sp.range === "daily" || sp.range === "weekly" ? sp.range : "monthly";
   const d = await getDashboard(range);
   const mod = (k: string) => settings.modules.includes(k as never);

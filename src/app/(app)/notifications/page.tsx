@@ -4,7 +4,7 @@ import { requireStaff } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Badge, Card, EmptyState, Flash, PageHeader } from "@/components/ui";
 import { Pagination } from "@/components/app/search-bar";
-import { retryNotification, sendNotification } from "@/actions/messages";
+import { retryAllQueued, retryNotification, sendNotification } from "@/actions/messages";
 import { fmtDateTime, woNumber } from "@/lib/format";
 
 export const metadata = { title: "Notifications" };
@@ -25,7 +25,7 @@ export default async function NotificationsPage({ searchParams }: { searchParams
 
   return (
     <div>
-      <PageHeader title="Notifications" subtitle="Everything sent to customers — estimate links, ready-for-pickup, appointment confirmations, invoices." />
+      <PageHeader title="Notifications" subtitle="Everything sent to customers — estimate links, ready-for-pickup, appointment confirmations, invoices." actions={queued ? <form action={retryAllQueued}><button className="btn btn-secondary"><RotateCw size={15} /> Retry {queued} queued</button></form> : undefined} />
       <Flash searchParams={sp} />
       {!providers.email || !providers.sms ? (
         <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-200">

@@ -9,7 +9,7 @@ import { requireStaff, BILLING_ROLES } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { computeTotals } from "@/lib/money";
 import { queueNotification } from "@/lib/notify";
-import { renderTemplate } from "@/lib/templates";
+import { publicBase, renderTemplate } from "@/lib/templates";
 import { emitWebhook } from "@/lib/webhooks";
 import type { FormState } from "./customers";
 import type { WorkOrderStatus } from "@/generated/prisma/enums";
@@ -362,6 +362,7 @@ export async function createInvoice(workOrderId: string) {
         workOrderId,
         customerId: wo.customerId,
         status: "SENT",
+        payToken: randomBytes(18).toString("base64url"),
         dueAt: new Date(Date.now() + 14 * 86_400_000),
         subtotal: t.subtotal,
         discount: Math.abs(t.discount),
@@ -382,7 +383,7 @@ export async function createInvoice(workOrderId: string) {
     await tx.timeEntry.updateMany({ where: { workOrderId, endedAt: null }, data: { endedAt: new Date() } });
     return inv;
   });
-  const tpl = await renderTemplate("invoice_ready", { customer: wo.customer.firstName, invoice: `INV-${String(invoice.number).padStart(5, "0")}`, total: t.total.toLocaleString("en-US", { style: "currency", currency: "USD" }) });
+  const tpl = await renderTemplate("invoice_ready", { customer: wo.customer.firstName, invoice: `INV-${String(invoice.number).padStart(5, "0")}`, total: t.total.toLocaleString("en-US", { style: "currency", currency: "USD" }), link: `${await publicBase()}/pay/${invoice.payToken}` });
   await queueNotification({ customerId: wo.customerId, workOrderId, ...tpl });
   await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "invoice", entity: "Invoice", entityId: invoice.id, detail: `WO-${wo.number}` } });
   emitWebhook("invoice.created", { ...invoice, workOrderNumber: wo.number, customer: { id: wo.customer.id, firstName: wo.customer.firstName, lastName: wo.customer.lastName, email: wo.customer.email } });

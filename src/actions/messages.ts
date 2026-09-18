@@ -47,6 +47,17 @@ export async function sendNotification(formData: FormData) {
   redirect("/notifications?ok=Notification+sent");
 }
 
+/** Re-send every queued email/SMS for this shop (needs a provider configured). */
+export async function retryAllQueued() {
+  await requireStaff();
+  const { flushOutbox } = await import("@/lib/notify");
+  const { mailConfigured, smsConfigured } = await import("@/lib/mail");
+  if (!mailConfigured() && !smsConfigured()) redirect("/notifications?error=No+email+or+SMS+provider+is+configured+yet+%28see+DEPLOY.md%29");
+  const n = await flushOutbox(await currentShopId());
+  revalidatePath("/notifications");
+  redirect(`/notifications?ok=${n}+sent`);
+}
+
 export async function retryNotification(id: string) {
   await requireStaff();
   const n = await db.notification.findUniqueOrThrow({ where: { id } });

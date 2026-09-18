@@ -538,6 +538,8 @@ model Invoice {
   total      Decimal       @default(0) @db.Decimal(12, 2)
   amountPaid Decimal       @default(0) @db.Decimal(12, 2)
   notes      String?
+  // public view-and-pay link sent by email/SMS (no login needed)
+  payToken   String?       @unique
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
 

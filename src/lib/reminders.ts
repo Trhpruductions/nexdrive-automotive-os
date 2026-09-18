@@ -49,6 +49,8 @@ export function startReminderScheduler() {
   if (timer) return;
   const run = async () => {
     await sendDueReminders().catch((e) => console.error("[nexdrive] reminder run failed", e));
+    const { flushOutbox } = await import("./notify");
+    await flushOutbox().then((n) => n && console.log(`[nexdrive] outbox: ${n} queued notification(s) sent`)).catch((e) => console.error("[nexdrive] outbox flush failed", e));
     const { expireTrials } = await import("./billing");
     await expireTrials().then((n) => n && console.log(`[nexdrive] ${n} expired trial(s) suspended`)).catch((e) => console.error("[nexdrive] trial expiry failed", e));
   };

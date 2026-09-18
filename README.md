@@ -95,6 +95,10 @@ Around that core:
 - **Import data** — Settings → Import data takes a CSV from the old system (customers, vehicles, parts), auto-matches columns, previews, and imports in chunks. Existing records are matched (email/phone/name, VIN/plate, SKU) and updated rather than duplicated.
 - **Activity log** — Settings → Activity log shows who did what (logins, payments, receipts, resets…), filterable by action.
 - **Custom 404 / error pages** so a bad link or a failed render never drops the user on a blank screen.
+- **Technician "My day"** — technicians sign in to their own dashboard: the job they're clocked on, their open jobs with one-tap Start/Stop, today's appointments and inspections still to do. Built for a phone or bay tablet.
+- **Text-to-pay** — every invoice has a public link (`/pay/{token}`, shown on the invoice as *Customer pay link* and inserted as `{link}` in the invoice message). The customer sees the invoice and, when the shop has Stripe set up, pays by card — no account needed.
+- **Installable** — NexDrive is a PWA: "Add to Home Screen" on iPad / Android / iPhone gives a full-screen app with the shop's icon. Baseline security headers (nosniff, frame-ancestors, referrer policy, HSTS in production) are set for every response.
+- **Outbox retry** — queued email/SMS are re-sent automatically every hour once a provider is configured (and on demand with *Retry queued* on the Notifications page).
 
 ## Production lines & inventory feeds
 

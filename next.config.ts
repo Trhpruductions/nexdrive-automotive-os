@@ -10,6 +10,21 @@ const nextConfig: NextConfig = {
   output: "standalone",
   // Uploaded photos can be large; keep server-action bodies generous
   experimental: { serverActions: { bodySizeLimit: "20mb" } },
+  // Baseline security headers. HSTS only matters behind HTTPS (Caddy in docker-compose terminates TLS).
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=(self)" },
+          ...(process.env.NODE_ENV === "production" ? [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }] : []),
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

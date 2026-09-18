@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { getSettings, accentVars } from "@/lib/settings";
@@ -11,8 +11,14 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: { default: `${s.name} · NexDrive Automotive OS`, template: `%s · ${s.name}` },
     description: "Complete automotive business management software",
+    applicationName: "NexDrive",
+    // installable on phones / bay tablets (see manifest.ts)
+    appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: s.shopId ? s.name : "NexDrive" },
+    icons: { apple: "/brand/apple-touch-icon.png" },
   };
 }
+
+export const viewport: Viewport = { themeColor: "#0b0f19", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const s = await getSettings();
