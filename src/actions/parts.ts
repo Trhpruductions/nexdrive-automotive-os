@@ -15,6 +15,8 @@ const PartSchema = z.object({
   description: z.string().optional(),
   category: z.string().optional(),
   brand: z.string().optional(),
+  kind: z.enum(["STOCK", "MATERIAL"]).optional(),
+  unit: z.string().max(12).optional(),
   location: z.string().optional(),
   supplierId: z.string().optional(),
   quantityOnHand: z.coerce.number().int().min(0).default(0),
@@ -29,7 +31,7 @@ export async function createPart(_prev: FormState, formData: FormData): Promise<
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
   const d = parsed.data;
   if (await db.part.findFirst({ where: { sku: d.sku } })) return { error: "That SKU already exists" };
-  const part = await db.part.create({ data: { shopId: await currentShopId(), ...d, description: opt(d.description), category: opt(d.category), brand: opt(d.brand), location: opt(d.location), supplierId: opt(d.supplierId) } });
+  const part = await db.part.create({ data: { shopId: await currentShopId(), ...d, kind: d.kind ?? "STOCK", unit: opt(d.unit) ?? "ea", description: opt(d.description), category: opt(d.category), brand: opt(d.brand), location: opt(d.location), supplierId: opt(d.supplierId) } });
   if (d.quantityOnHand) await db.stockMovement.create({ data: { partId: part.id, delta: d.quantityOnHand, reason: "Initial stock" } });
   revalidatePath("/parts");
   redirect(`/parts/${part.id}`);
@@ -42,7 +44,7 @@ export async function updatePart(id: string, _prev: FormState, formData: FormDat
   const d = parsed.data;
   const dupe = await db.part.findFirst({ where: { sku: d.sku } });
   if (dupe && dupe.id !== id) return { error: "That SKU already exists" };
-  await db.part.update({ where: { id }, data: { ...d, description: opt(d.description), category: opt(d.category), brand: opt(d.brand), location: opt(d.location), supplierId: opt(d.supplierId), active: formData.get("active") !== "false" } });
+  await db.part.update({ where: { id }, data: { ...d, kind: d.kind ?? undefined, unit: opt(d.unit) ?? "ea", description: opt(d.description), category: opt(d.category), brand: opt(d.brand), location: opt(d.location), supplierId: opt(d.supplierId), active: formData.get("active") !== "false" } });
   revalidatePath(`/parts/${id}`);
   redirect(`/parts/${id}?ok=Part+updated`);
 }

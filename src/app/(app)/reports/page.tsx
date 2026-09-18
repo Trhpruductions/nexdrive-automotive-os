@@ -20,7 +20,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const [payments, prevPayments, invoices, lines, custCount, newCustomers, techs, byStatus, months, openInvoices, taxRows, returningRows, partLines, timeEntries] = await Promise.all([
     db.payment.findMany({ where: { paidAt: { gte: since } }, select: { amount: true, paidAt: true, method: true } }),
     db.payment.aggregate({ _sum: { amount: true }, where: { paidAt: { gte: prevSince, lt: since } } }),
-    db.invoice.findMany({ where: { issuedAt: { gte: since }, status: { not: "VOID" } }, select: { total: true, tax: true, workOrder: { select: { technicianId: true, customerId: true } } } }),
+    db.invoice.findMany({ where: { issuedAt: { gte: since }, status: { not: "VOID" } }, select: { total: true, tax: true, customerId: true, workOrder: { select: { technicianId: true, customerId: true } } } }),
     db.workOrderLine.findMany({ where: { approved: true, workOrder: { status: "INVOICED", invoice: { issuedAt: { gte: since }, status: { not: "VOID" } } } }, select: { kind: true, quantity: true, hours: true, unitPrice: true, part: { select: { cost: true } }, workOrder: { select: { technicianId: true } } } }),
     db.customer.count(),
     db.customer.count({ where: { createdAt: { gte: since } } }),
@@ -57,13 +57,13 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     .map((t) => {
       const mine = lines.filter((l) => l.workOrder.technicianId === t.id);
       const hrs = mine.filter((l) => l.kind === "LABOR").reduce((s, l) => s + Number(l.hours ?? l.quantity), 0);
-      const rev = invoices.filter((i) => i.workOrder.technicianId === t.id).reduce((s, i) => s + Number(i.total), 0);
+      const rev = invoices.filter((i) => i.workOrder?.technicianId === t.id).reduce((s, i) => s + Number(i.total), 0);
       const clocked = timeEntries.filter((e) => e.technicianId === t.id).reduce((s, e) => s + differenceInMinutes(e.endedAt ?? now, e.startedAt), 0) / 60;
-      return { ...t, hrs, rev, clocked, efficiency: clocked > 0 ? hrs / clocked : null, jobs: invoices.filter((i) => i.workOrder.technicianId === t.id).length };
+      return { ...t, hrs, rev, clocked, efficiency: clocked > 0 ? hrs / clocked : null, jobs: invoices.filter((i) => i.workOrder?.technicianId === t.id).length };
     })
     .sort((a, b) => b.rev - a.rev);
   const topRev = techRows[0]?.rev || 1;
-  const repeat = invoices.length ? new Set(invoices.map((i) => i.workOrder.customerId)).size : 0;
+  const repeat = invoices.length ? new Set(invoices.map((i) => i.customerId)).size : 0;
 
   // AR aging on open invoices
   const buckets = [
@@ -100,7 +100,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const categories = [...byCategory.entries()].sort((a, b) => b[1].revenue - a[1].revenue);
 
   // retention: customers invoiced in range who had an invoice before the range vs. first-timers
-  const invoicedCustomers = new Set(invoices.map((i) => i.workOrder.customerId));
+  const invoicedCustomers = new Set(invoices.map((i) => i.customerId));
   const priorCustomers = new Set(returningRows.map((r) => r.customerId));
   const returning = [...invoicedCustomers].filter((c) => priorCustomers.has(c)).length;
   const brandNew = invoicedCustomers.size - returning;

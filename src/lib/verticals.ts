@@ -44,7 +44,7 @@ export type Vertical = {
 const auto: Terms = { asset: "Vehicle", assets: "Vehicles", serial: "VIN", serialHint: "17 characters — decode fills year, make, model, trim, engine", vinDecode: true, plate: "License plate", odometer: "Mileage", odometerUnit: "mi", make: "Make", model: "Model", engine: "Engine", transmission: "Transmission", diagram: "car", dropOff: "I'll drop the vehicle off", inShop: "Vehicles in shop" };
 
 export const VERTICALS: Vertical[] = [
-  { key: "automotive", label: "Automotive repair", blurb: "Cars, trucks and vans — the classic service shop.", terms: auto, inspection: DEFAULT_INSPECTION_TEMPLATE, cannedServices: DEFAULT_CANNED_SERVICES, modulesOff: [] },
+  { key: "automotive", label: "Automotive repair", blurb: "Cars, trucks and vans — the classic service shop.", terms: auto, inspection: DEFAULT_INSPECTION_TEMPLATE, cannedServices: DEFAULT_CANNED_SERVICES, modulesOff: ["jobs", "tooling", "shipments"] },
   {
     key: "powersports", label: "Motorcycle & powersports", blurb: "Motorcycles, ATVs, UTVs, snowmobiles, scooters.",
     terms: { ...auto, asset: "Unit", assets: "Units", dropOff: "I'll drop the unit off", inShop: "Units in shop", diagram: "none" },
@@ -64,7 +64,7 @@ export const VERTICALS: Vertical[] = [
       { name: "Carburetor / Fuel System Clean", description: "Disassemble, ultrasonic clean, rebuild kit", laborHours: 2 },
       { name: "Winterisation / Storage Prep", description: "Fuel stabiliser, battery tender, fluids", laborHours: 1 },
     ],
-    modulesOff: ["production"],
+    modulesOff: ["production", "jobs", "tooling", "shipments"],
   },
   {
     key: "marine", label: "Marine & boat service", blurb: "Outboards, sterndrives, inboards, PWC and trailers.",
@@ -84,7 +84,7 @@ export const VERTICALS: Vertical[] = [
       { name: "Spring Commissioning", description: "De-winterise, batteries, test run", laborHours: 2 },
       { name: "Bottom Paint", description: "Prep and antifouling coat", laborHours: 4 },
     ],
-    modulesOff: ["production"],
+    modulesOff: ["production", "jobs", "tooling", "shipments"],
   },
   {
     key: "small_engine", label: "Small engine & outdoor power", blurb: "Mowers, generators, chainsaws, trimmers, pressure washers.",
@@ -103,7 +103,7 @@ export const VERTICALS: Vertical[] = [
       { name: "Chainsaw Service", description: "Chain, bar, filter, plug, carb adjust", laborHours: 0.8 },
       { name: "Generator Service", description: "Oil, filter, plug, load test", laborHours: 1.2 },
     ],
-    modulesOff: ["production"],
+    modulesOff: ["production", "jobs", "tooling", "shipments"],
   },
   {
     key: "heavy_equipment", label: "Heavy equipment & fleet", blurb: "Excavators, loaders, forklifts, agricultural and fleet trucks.",
@@ -123,7 +123,7 @@ export const VERTICALS: Vertical[] = [
       { name: "Field Service Call", description: "Travel + on-site diagnosis", laborHours: 2 },
       { name: "DOT / Safety Inspection", description: "Annual inspection & report", laborHours: 1.5 },
     ],
-    modulesOff: [],
+    modulesOff: ["jobs", "tooling", "shipments"],
   },
   {
     key: "hvac_appliance", label: "HVAC & appliance repair", blurb: "Furnaces, AC, heat pumps, refrigeration, washers, dryers.",
@@ -142,7 +142,7 @@ export const VERTICALS: Vertical[] = [
       { name: "Refrigerant Recharge", description: "Leak check, evacuate, charge", laborHours: 1.5 },
       { name: "Appliance Diagnostic", description: "Diagnose fault, quote repair", laborHours: 0.75 },
     ],
-    modulesOff: ["production"],
+    modulesOff: ["production", "jobs", "tooling", "shipments"],
   },
   {
     key: "electronics", label: "Electronics & device repair", blurb: "Phones, laptops, consoles, TVs, audio gear.",
@@ -161,7 +161,7 @@ export const VERTICALS: Vertical[] = [
       { name: "Liquid Damage Treatment", description: "Ultrasonic clean, board inspection", laborHours: 1.5 },
       { name: "Diagnostic Bench Fee", description: "Full diagnosis, written quote", laborHours: 0.5 },
     ],
-    modulesOff: ["production"],
+    modulesOff: ["production", "jobs", "tooling", "shipments"],
   },
   {
     key: "general", label: "General repair & service", blurb: "Anything else that comes in for service — bikes, tools, instruments.",
@@ -176,7 +176,26 @@ export const VERTICALS: Vertical[] = [
       { name: "Standard Service", description: "Clean, adjust, lubricate, test", laborHours: 1 },
       { name: "Repair Labor (per hour)", description: "General repair labor", laborHours: 1 },
     ],
-    modulesOff: ["production"],
+    modulesOff: ["production", "jobs", "tooling", "shipments"],
+  },
+  {
+    key: "stamping", label: "Metal stamping & press parts", blurb: "Presses, dies, coil stock and finished parts for customers — with live press counts.",
+    terms: { asset: "Press", assets: "Presses", serial: "Serial / asset ID", serialHint: "Manufacturer serial or internal asset number", vinDecode: false, plate: "Line / bay", odometer: "Strokes", odometerUnit: "", make: "Manufacturer", model: "Model / tonnage", engine: "Drive / capacity", transmission: null, diagram: "none", dropOff: "On-site", inShop: "Presses under maintenance" },
+    inspection: [
+      ["Safety", ["Light curtains / guards", "Two-hand controls", "E-stops", "Brake monitor", "Lockout points"]],
+      ["Press", ["Clutch & brake", "Gibs & slide", "Counterbalance", "Bolster & ram flatness", "Lubrication system", "Flywheel & belts"]],
+      ["Feed & Coil", ["Feeder rolls", "Straightener", "Uncoiler brake", "Coil car / loader"]],
+      ["Die & Tooling", ["Die clamps", "Shut height", "Die protection sensors", "Scrap chute"]],
+      ["Electrical & Hydraulic", ["Controls / PLC faults", "Hydraulic overload", "Pressure & leaks", "Motor temperature"]],
+    ],
+    cannedServices: [
+      { name: "Press PM (monthly)", description: "Lube, clutch/brake check, guards, controls", laborHours: 2 },
+      { name: "Press PM (annual)", description: "Full inspection, gib adjustment, brake overhaul as needed", laborHours: 8 },
+      { name: "Die Sharpen", description: "Sharpen punches & buttons, reset hit counter", laborHours: 3 },
+      { name: "Die Rebuild", description: "Replace worn components, tryout", laborHours: 12 },
+      { name: "Breakdown Response", description: "Diagnose and restore production", laborHours: 2 },
+    ],
+    modulesOff: [],
   },
   {
     key: "production", label: "Manufacturing & production", blurb: "Machines, lines and maintenance jobs with live production feeds.",

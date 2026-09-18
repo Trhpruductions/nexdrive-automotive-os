@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { Badge, Card, EmptyState, Flash, KpiCard, PageHeader } from "@/components/ui";
 import { ListFilters, Pagination } from "@/components/app/search-bar";
 import { money, num } from "@/lib/format";
+import { getSettings } from "@/lib/settings";
 import { Boxes, DollarSign } from "lucide-react";
 
 export const metadata = { title: "Parts & Inventory" };
@@ -12,6 +13,8 @@ const PAGE = 40;
 
 export default async function PartsPage({ searchParams }: { searchParams: Promise<{ q?: string; filter?: string; category?: string; page?: string; ok?: string; error?: string }> }) {
   await requireStaff();
+  const { modules } = await getSettings();
+  const productsOn = modules.includes("jobs");
   const sp = await searchParams;
   const q = sp.q?.trim() ?? "";
   const page = Math.max(1, Number(sp.page) || 1);
@@ -39,6 +42,7 @@ export default async function PartsPage({ searchParams }: { searchParams: Promis
         actions={
           <>
             <a href="/api/export/parts" className="btn btn-secondary" download><Download size={16} /> Export CSV</a>
+            {productsOn ? <Link href="/parts/products" className="btn btn-secondary"><Boxes size={16} /> Products</Link> : null}
             <Link href="/parts/orders" className="btn btn-secondary"><ClipboardList size={16} /> Purchase orders</Link>
             <Link href="/parts/suppliers" className="btn btn-secondary"><Truck size={16} /> Suppliers</Link>
             <Link href="/parts/scan" className="btn btn-secondary"><ScanBarcode size={16} /> Scan</Link>

@@ -1,7 +1,8 @@
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { CheckCircle2, CreditCard } from "lucide-react";
-import { db, rawDb, withShop } from "@/lib/db";
+import { rawDb, withShop } from "@/lib/db";
+import { invoiceView } from "@/lib/invoice-view";
 import { getSettings, accentVars, shopAddress } from "@/lib/settings";
 import { InvoiceSheet } from "@/components/app/invoice-sheet";
 import { PrintButton } from "@/components/app/print-button";
@@ -18,8 +19,10 @@ export default async function PayPage({ params, searchParams }: { params: Promis
   if (!found) notFound();
   return withShop(found.shopId, async () => {
     const s = await getSettings();
-    const inv = await db.invoice.findFirst({ where: { payToken: token }, include: { customer: true, workOrder: { include: { vehicle: true, lines: { orderBy: { sortOrder: "asc" } } } } } });
-    if (!inv) notFound();
+    const row = await rawDb.invoice.findUnique({ where: { payToken: token }, select: { id: true } });
+    const view = row ? await invoiceView(row.id) : null;
+    if (!view) notFound();
+    const { inv } = view;
     const balance = Math.round((Number(inv.total) - Number(inv.amountPaid)) * 100) / 100;
     const paid = balance <= 0.005 || inv.status === "PAID";
     return (
@@ -68,15 +71,16 @@ export default async function PayPage({ params, searchParams }: { params: Promis
             kind="INVOICE"
             settings={s}
             number={inv.number}
-            workOrderNumber={inv.workOrder.number}
+            workOrderNumber={view.workOrderNumber}
+            reference={view.reference}
             date={inv.issuedAt}
             dueAt={inv.dueAt}
             customer={inv.customer}
-            vehicle={inv.workOrder.vehicle}
-            lines={inv.workOrder.lines}
-            complaint={inv.workOrder.complaint}
-            diagnosis={inv.workOrder.diagnosis}
-            mileageIn={inv.workOrder.mileageIn}
+            vehicle={view.vehicle}
+            lines={view.lines}
+            complaint={view.complaint}
+            diagnosis={view.diagnosis}
+            mileageIn={view.mileageIn}
             amountPaid={Number(inv.amountPaid)}
             notes={inv.notes}
           />

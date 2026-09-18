@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Settings2, Trash2 } from "lucide-react";
+import { BarChart3, Plus, Settings2, Trash2 } from "lucide-react";
 import { requireStaff, can, MANAGER_ROLES } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { productionSnapshot } from "@/lib/integrations/snapshot";
@@ -24,6 +24,7 @@ export default async function ProductionPage({ searchParams }: { searchParams: P
         subtitle="Live status, counts and readings from every connected machine and line — plus inventory as it changes."
         actions={
           <>
+            {manager ? <Link href="/production/report" className="btn btn-secondary"><BarChart3 size={15} /> Shift & OEE</Link> : null}
             {manager ? <Link href="/settings?tab=integrations" className="btn btn-secondary"><Settings2 size={15} /> Feeds</Link> : null}
             {manager ? <Link href={sp.manage ? "/production" : "/production?manage=1"} className="btn btn-primary"><Plus size={15} /> {sp.manage ? "Hide setup" : "Lines & machines"}</Link> : null}
           </>

@@ -17,6 +17,8 @@ import { PaymentsTab } from "./payments-tab";
 import { ImportTab } from "./import-tab";
 import { ActivityTab } from "./activity-tab";
 import { BusinessTypeTab } from "./business-type-tab";
+import { saveShifts } from "@/actions/production";
+import { DEFAULT_SHIFTS, type Shift } from "@/lib/production";
 import { CopyField } from "./copy-field";
 import { headers } from "next/headers";
 import { rawDb } from "@/lib/db";
@@ -133,6 +135,25 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </div>
             <div className="sm:col-span-2"><button className="btn btn-primary"><Save size={15} /> Save rates</button></div>
           </form>
+          {s.modules.includes("jobs") ? (
+            <form action={saveShifts} className="mt-6 pt-5 border-t border-border max-w-3xl">
+              <div className="card-title mb-1">Production shifts</div>
+              <p className="text-xs text-muted mb-3">Used to book runs to a shift and as planned time for OEE. Up to four; leave a name blank to drop it.</p>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {[0, 1, 2, 3].map((i) => {
+                  const sh = ((Array.isArray((s as unknown as { shifts?: Shift[] }).shifts) ? (s as unknown as { shifts: Shift[] }).shifts : DEFAULT_SHIFTS) as Shift[])[i];
+                  return (
+                    <div key={i} className="grid grid-cols-[1fr_100px_100px] gap-2">
+                      <input name="shiftName" defaultValue={sh?.name ?? ""} placeholder={`Shift ${i + 1}`} className="input" />
+                      <input name="shiftStart" type="time" defaultValue={sh?.start ?? "06:00"} className="input" />
+                      <input name="shiftEnd" type="time" defaultValue={sh?.end ?? "14:00"} className="input" />
+                    </div>
+                  );
+                })}
+              </div>
+              <button className="btn btn-secondary mt-3"><Save size={15} /> Save shifts</button>
+            </form>
+          ) : null}
         </Card>
       ) : null}
 

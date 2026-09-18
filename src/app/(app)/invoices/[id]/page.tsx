@@ -9,9 +9,10 @@ import { ConfirmButton } from "@/components/app/confirm-button";
 import { InvoiceSheet } from "@/components/app/invoice-sheet";
 import { recordPayment, resendInvoice, updateInvoiceNotes, voidInvoice } from "@/actions/invoices";
 import { INVOICE_STATUS, PAYMENT_METHODS } from "@/lib/constants";
-import { fmtDateTime, invNumber, money, toDateInput, woNumber } from "@/lib/format";
+import { fmtDateTime, invNumber, money, toDateInput } from "@/lib/format";
 import { CopyField } from "@/app/(app)/settings/copy-field";
 import { publicBase } from "@/lib/templates";
+import { invoiceView } from "@/lib/invoice-view";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -24,8 +25,9 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   const settings = await getSettings();
   const { id } = await params;
   const sp = await searchParams;
-  const inv = await db.invoice.findUnique({ where: { id }, include: { customer: true, payments: { orderBy: { paidAt: "desc" } }, workOrder: { include: { vehicle: true, lines: { orderBy: { sortOrder: "asc" } } } } } });
-  if (!inv) notFound();
+  const view = await invoiceView(id);
+  if (!view) notFound();
+  const { inv } = view;
   const balance = Number(inv.total) - Number(inv.amountPaid);
   const st = INVOICE_STATUS[inv.status];
   const payLink = inv.payToken ? `${await publicBase()}/pay/${inv.payToken}` : null;
@@ -34,7 +36,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
     <div>
       <PageHeader
         title={<span className="flex items-center gap-3">{invNumber(inv.number)} <Badge tone={st.tone}>{st.label}</Badge></span>}
-        subtitle={<>{inv.customer.firstName} {inv.customer.lastName} · <Link href={`/work-orders/${inv.workOrderId}`} className="text-accent hover:underline">{woNumber(inv.workOrder.number)}</Link></>}
+        subtitle={<>{inv.customer.firstName} {inv.customer.lastName} · <Link href={view.backHref} className="text-accent hover:underline">{view.backLabel}</Link></>}
         crumbs={[{ label: "Invoices", href: "/invoices" }, { label: invNumber(inv.number) }]}
         actions={
           <>
@@ -47,7 +49,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
       <Flash searchParams={sp} />
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className="xl:col-span-2">
-          <InvoiceSheet kind="INVOICE" settings={settings} number={inv.number} workOrderNumber={inv.workOrder.number} date={inv.issuedAt} dueAt={inv.dueAt} customer={inv.customer} vehicle={inv.workOrder.vehicle} lines={inv.workOrder.lines} complaint={inv.workOrder.complaint} diagnosis={inv.workOrder.diagnosis} mileageIn={inv.workOrder.mileageIn} amountPaid={Number(inv.amountPaid)} notes={inv.notes} />
+          <InvoiceSheet kind="INVOICE" settings={settings} number={inv.number} workOrderNumber={view.workOrderNumber} reference={view.reference} date={inv.issuedAt} dueAt={inv.dueAt} customer={inv.customer} vehicle={view.vehicle} lines={view.lines} complaint={view.complaint} diagnosis={view.diagnosis} mileageIn={view.mileageIn} amountPaid={Number(inv.amountPaid)} notes={inv.notes} />
         </div>
         <div className="space-y-4">
           {payLink && inv.status !== "VOID" ? (

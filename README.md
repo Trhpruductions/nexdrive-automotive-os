@@ -153,6 +153,18 @@ curl -X POST http://127.0.0.1:4500/api/ingest -H "Authorization: Bearer nd_demo_
 
 The **Production** page updates live (SSE) as events arrive. **Parts → Scan** works with any USB/Bluetooth barcode scanner for receiving and pulling stock.
 
+### Press shop production (metal stamping)
+
+Pick the **Metal stamping & press parts** business type and three modules appear — **Jobs**, **Tooling**, **Shipments** — on top of the live production floor:
+
+- **Products** (Parts → Products): the parts you make — your part number, the customer and their part number, the die and default press, the coil/sheet **material** and material per piece, a standard rate (pcs/h), pack quantity, price and cost. Raw material is an inventory item of kind *Material* with its own unit (lb, ft…).
+- **Jobs** (production orders): quantity, customer PO, due date, press and die. *Start* mounts the die, opens a run for the current shift and puts the press to RUNNING; **live `machine.count` events from that press land on the job, its run and the die's hit counter**; manual counts and downtime reasons can be added; the job **auto-completes at the order quantity**, books good pieces into finished-goods stock, consumes material and frees the press. Progress, scrap %, rate vs standard and ETA are on the job page.
+- **Tooling**: dies with hit counts fed by the presses, service intervals (sharpen every N hits), where each die is mounted, the products it makes, and a one-click *Record service* that resets the interval; dies past their interval flip to *maintenance* automatically.
+- **Shipments**: pick a customer, ship pieces from complete jobs and finished-goods stock, print a **packing slip**, mark shipped (stock leaves), then **Create invoice** — a goods invoice with the same pay link and portal flow as service invoices.
+- **Shift & OEE report** (Production → Shift & OEE): per press per day — run time vs planned shift time, good/scrap, availability × performance × quality = OEE, output by shift, downtime reasons. Shifts are set under Settings → Rates & hours.
+
+The seed includes **Roswell Press & Stamping** (login `press@nexdrive.app`, feed key `nd_demo_roswellpress_feed_key`) with three presses, three dies, two B2B customers, coil stock, products and jobs.
+
 ### Machines ↔ maintenance
 
 A machine on the live feed can be tied to an asset record (Production → machine → *Maintenance*): create the record from the machine or pick an existing one. From then on a **critical alarm opens a maintenance work order automatically** (one open job per machine, optional per machine), a `machine.reading` for the run-hours metric (`run_hours` by default, configurable) keeps the asset's counter current so **interval-based PM reminders fire from real run-hours**, *Open job* on the machine page creates a job by hand, and **completing the job releases the machine** from maintenance/down to idle with an event in its history. Jobs for in-house equipment bill to an internal "In-house" customer that is created on first use.

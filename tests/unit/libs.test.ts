@@ -136,3 +136,17 @@ describe("business types", () => {
     expect(t.serial).toBe("VIN");
   });
 });
+
+describe("production shifts", () => {
+  it("assigns a moment to the right shift, including overnight shifts", async () => {
+    const { shiftAt } = await import("@/lib/production");
+    const shifts = [{ name: "1st", start: "06:00", end: "14:00" }, { name: "2nd", start: "14:00", end: "22:00" }, { name: "3rd", start: "22:00", end: "06:00" }];
+    const at = (h: number, m = 0) => new Date(2026, 8, 17, h, m);
+    expect(shiftAt(shifts, at(6))).toBe("1st");
+    expect(shiftAt(shifts, at(13, 59))).toBe("1st");
+    expect(shiftAt(shifts, at(14))).toBe("2nd");
+    expect(shiftAt(shifts, at(23))).toBe("3rd");
+    expect(shiftAt(shifts, at(2))).toBe("3rd");
+    expect(shiftAt(shifts.slice(0, 2), at(2))).toBeNull();
+  });
+});

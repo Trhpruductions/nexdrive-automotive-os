@@ -22,6 +22,9 @@ export type ModuleKey =
   | "payments"
   | "ai"
   | "production"
+  | "jobs"
+  | "tooling"
+  | "shipments"
   | "messages"
   | "notifications";
 
@@ -49,6 +52,9 @@ export const MODULES: ModuleDef[] = [
   { key: "payments", label: "Payments", href: "/payments", description: "Payment history and outstanding balances", group: "main", roles: ["OWNER", "ADMIN", "SERVICE_ADVISOR"] },
   { key: "ai", label: "NexDrive AI", href: "/ai", description: "AI assistant with access to your shop data", group: "main" },
   { key: "production", label: "Production", href: "/production", description: "Live machine / production-line feed and inventory sync", group: "main" },
+  { key: "jobs", label: "Jobs", href: "/jobs", description: "Production orders: what to make, on which press, by when", group: "main" },
+  { key: "tooling", label: "Tooling", href: "/tooling", description: "Dies and tooling with hit counts and service intervals", group: "main" },
+  { key: "shipments", label: "Shipments", href: "/shipments", description: "Finished goods out the door, packing slips, goods invoices", group: "main", roles: ["OWNER", "ADMIN", "SERVICE_ADVISOR"] },
   { key: "messages", label: "Messages", href: "/messages", description: "Two-way customer messaging", group: "comms" },
   { key: "notifications", label: "Notifications", href: "/notifications", description: "Customer notification outbox", group: "comms" },
 ];

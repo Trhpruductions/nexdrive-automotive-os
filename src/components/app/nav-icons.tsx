@@ -1,5 +1,8 @@
 import {
   Activity,
+  Factory,
+  Hammer,
+  Truck,
   Bell,
   Bot,
   Calendar,
@@ -28,6 +31,9 @@ export const NAV_ICON: Record<ModuleKey | "dashboard" | "settings", LucideIcon> 
   estimates: FileText,
   invoices: Receipt,
   parts: Package,
+  jobs: Factory,
+  tooling: Hammer,
+  shipments: Truck,
   technicians: Wrench,
   inspections: ClipboardCheck,
   reports: LayoutDashboard,

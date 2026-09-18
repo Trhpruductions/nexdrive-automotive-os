@@ -4,6 +4,7 @@ import { db, rawDb, currentShopId } from "@/lib/db";
 import { bus } from "./bus";
 import { emitWebhook } from "@/lib/webhooks";
 import { openMaintenanceJob, syncRunHours } from "@/lib/maintenance";
+import { applyPressCount } from "@/lib/production";
 import type { MachineStatus } from "@/generated/prisma/enums";
 
 /**
@@ -122,6 +123,8 @@ async function applyOne(ev: CanonicalEvent, ctx: { integrationId?: string; sourc
       const m = await ensureMachine(ev, ctx.integrationId);
       await db.machineEvent.create({ data: { machineId: m.id, type: "COUNT", count: ev.count, good: ev.good ?? ev.count, scrap: ev.scrap ?? 0, occurredAt: at, raw: ev as object } });
       if (m.status === "OFFLINE" || m.status === "IDLE") await db.machine.update({ where: { id: m.id }, data: { status: "RUNNING", lastStatusChangeAt: at } });
+      // press shop: counts land on the job running on this press (and the die's hit counter)
+      await applyPressCount(m.id, ev.good ?? ev.count, ev.scrap ?? 0, at).catch((e) => console.error("[nexdrive] press count failed", e));
       result.touchedMachines.push(m.code);
       return;
     }

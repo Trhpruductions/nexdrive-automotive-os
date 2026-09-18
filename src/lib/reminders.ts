@@ -57,6 +57,22 @@ export function startReminderScheduler() {
     const { flushOutbox } = await import("./notify");
     const { expireTrials } = await import("./billing");
     await runJob("maintenance reminders", () => sendDueReminders());
+    await runJob("die service check", async () => {
+      const { diesDueForService } = await import("./production");
+      const { rawDb, withShop } = await import("./db");
+      const shops = await rawDb.shop.findMany({ where: { status: { in: ["ACTIVE", "TRIAL"] } }, select: { id: true } });
+      let n = 0;
+      for (const shop of shops) {
+        await withShop(shop.id, async () => {
+          for (const d of await diesDueForService()) {
+            if (d.status !== "ACTIVE") continue;
+            await rawDb.die.update({ where: { id: d.id }, data: { status: "MAINTENANCE" } });
+            n++;
+          }
+        });
+      }
+      return n;
+    });
     await runJob("estimate follow-ups", () => sendEstimateFollowUps());
     await runJob("appointment reminders", () => sendAppointmentReminders());
     await runJob("daily digests", () => sendDailyDigests());

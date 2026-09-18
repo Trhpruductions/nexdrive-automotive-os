@@ -7,7 +7,7 @@ import { createPart, updatePart } from "@/actions/parts";
 import type { FormState } from "@/actions/customers";
 import { Field } from "@/components/ui";
 
-type Values = { id?: string; sku?: string; name?: string; description?: string | null; category?: string | null; brand?: string | null; location?: string | null; supplierId?: string | null; quantityOnHand?: number; reorderPoint?: number; cost?: number; price?: number; active?: boolean };
+type Values = { id?: string; sku?: string; name?: string; description?: string | null; category?: string | null; brand?: string | null; location?: string | null; supplierId?: string | null; quantityOnHand?: number; reorderPoint?: number; cost?: number; price?: number; active?: boolean; kind?: string; unit?: string };
 
 export function PartForm({ values = {}, suppliers, categories, cancelHref }: { values?: Values; suppliers: { id: string; name: string }[]; categories: string[]; cancelHref: string }) {
   const action = values.id ? updatePart.bind(null, values.id) : createPart;
@@ -19,6 +19,10 @@ export function PartForm({ values = {}, suppliers, categories, cancelHref }: { v
         <Field label="Name"><input name="name" required defaultValue={values.name ?? ""} className="input" /></Field>
         <Field label="Category"><input name="category" list="categories" defaultValue={values.category ?? ""} className="input" placeholder="Brakes" /><datalist id="categories">{categories.map((c) => <option key={c} value={c} />)}</datalist></Field>
         <Field label="Brand"><input name="brand" defaultValue={values.brand ?? ""} className="input" /></Field>
+        <Field label="Type" hint="Material = coil, sheet, bar consumed by production">
+          <select name="kind" defaultValue={values.kind ?? "STOCK"} className="select"><option value="STOCK">Stock part / supply</option><option value="MATERIAL">Raw material</option></select>
+        </Field>
+        <Field label="Unit" hint="ea, lb, ft, kg, m…"><input name="unit" defaultValue={values.unit ?? "ea"} className="input" maxLength={12} /></Field>
         <Field label="Bin location"><input name="location" defaultValue={values.location ?? ""} className="input" placeholder="A-12" /></Field>
         <Field label="Supplier">
           <select name="supplierId" defaultValue={values.supplierId ?? ""} className="select">

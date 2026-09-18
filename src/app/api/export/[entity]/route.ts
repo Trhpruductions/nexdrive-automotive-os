@@ -63,7 +63,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ entity: str
       columns = ["number", "status", "issuedAt", "dueAt", "customer", "email", "workOrder", "subtotal", "tax", "total", "amountPaid", "balance"];
       rows = data.map((i) => ({
         number: `INV-${String(i.number).padStart(5, "0")}`, status: i.status, issuedAt: i.issuedAt, dueAt: i.dueAt,
-        customer: `${i.customer.firstName} ${i.customer.lastName}`, email: i.customer.email, workOrder: `WO-${String(i.workOrder.number).padStart(5, "0")}`,
+        customer: `${i.customer.firstName} ${i.customer.lastName}`, email: i.customer.email, workOrder: i.workOrder ? `WO-${String(i.workOrder.number).padStart(5, "0")}` : "",
         subtotal: Number(i.subtotal).toFixed(2), tax: Number(i.tax).toFixed(2), total: Number(i.total).toFixed(2), amountPaid: Number(i.amountPaid).toFixed(2), balance: (Number(i.total) - Number(i.amountPaid)).toFixed(2),
       }));
       break;

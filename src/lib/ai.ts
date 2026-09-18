@@ -121,7 +121,7 @@ function buildTools(user: SessionUser, taxRate: number) {
       const byDay: Record<string, number> = {};
       for (const p of payments) byDay[format(p.paidAt, "yyyy-MM-dd")] = (byDay[format(p.paidAt, "yyyy-MM-dd")] ?? 0) + Number(p.amount);
       const byTech: Record<string, number> = {};
-      for (const i of invoices) byTech[i.workOrder.technician?.name ?? "Unassigned"] = (byTech[i.workOrder.technician?.name ?? "Unassigned"] ?? 0) + Number(i.total);
+      for (const i of invoices) byTech[i.workOrder?.technician?.name ?? "Unassigned"] = (byTech[i.workOrder?.technician?.name ?? "Unassigned"] ?? 0) + Number(i.total);
       return JSON.stringify({ days, collected: payments.reduce((s, p) => s + Number(p.amount), 0), invoiced: invoices.reduce((s, i) => s + Number(i.total), 0), invoiceCount: invoices.length, byDay, byTechnician: byTech });
     },
   });

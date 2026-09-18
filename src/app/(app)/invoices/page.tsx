@@ -25,7 +25,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
   };
   const [total, rows, open, overdue, month] = await Promise.all([
     db.invoice.count({ where }),
-    db.invoice.findMany({ where, orderBy: { issuedAt: "desc" }, skip: (page - 1) * PAGE, take: PAGE, include: { customer: true, workOrder: { include: { vehicle: true } } } }),
+    db.invoice.findMany({ where, orderBy: { issuedAt: "desc" }, skip: (page - 1) * PAGE, take: PAGE, include: { customer: true, workOrder: { include: { vehicle: true } }, shipment: { select: { number: true } } } }),
     db.invoice.findMany({ where: { status: { in: ["SENT", "PARTIAL"] } }, select: { total: true, amountPaid: true, dueAt: true } }),
     db.invoice.count({ where: { status: { in: ["SENT", "PARTIAL"] }, dueAt: { lt: new Date() } } }),
     db.invoice.aggregate({ _sum: { total: true }, where: { status: { not: "VOID" }, issuedAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) } } }),
@@ -58,9 +58,9 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                   const late = (i.status === "SENT" || i.status === "PARTIAL") && i.dueAt && i.dueAt < new Date();
                   return (
                     <tr key={i.id} className="row-link">
-                      <td><Link href={`/invoices/${i.id}`} className="font-semibold hover:text-accent">{invNumber(i.number)}</Link><div className="text-xs text-muted">{woNumber(i.workOrder.number)}</div></td>
+                      <td><Link href={`/invoices/${i.id}`} className="font-semibold hover:text-accent">{invNumber(i.number)}</Link><div className="text-xs text-muted">{i.workOrder ? woNumber(i.workOrder.number) : i.shipment ? `SH-${String(i.shipment.number).padStart(5, "0")}` : ""}</div></td>
                       <td><Link href={`/customers/${i.customerId}`} className="hover:text-accent">{i.customer.firstName} {i.customer.lastName}</Link></td>
-                      <td className="text-muted text-xs">{vehicleName(i.workOrder.vehicle)}</td>
+                      <td className="text-muted text-xs">{i.workOrder ? vehicleName(i.workOrder.vehicle) : "Goods shipment"}</td>
                       <td><Badge tone={INVOICE_STATUS[i.status].tone}>{INVOICE_STATUS[i.status].label}</Badge></td>
                       <td className="text-xs text-muted">{fmtDate(i.issuedAt)}</td>
                       <td className={`text-xs ${late ? "text-red-400 font-semibold" : "text-muted"}`}>{fmtDate(i.dueAt)}</td>

@@ -44,12 +44,17 @@ model Shop {
   woSeq       Int        @default(0)
   invSeq      Int        @default(0)
   poSeq       Int        @default(0)
+  jobSeq      Int        @default(0)
+  shipSeq     Int        @default(0)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
   settings       ShopSettings?
   users          User[]
   members        ShopMember[]
+  dies           Die[]
+  jobs           ProductionJob[]
+  shipments      Shipment[]
   technicians    Technician[]
   bays           Bay[]
   customers      Customer[]
@@ -187,6 +192,7 @@ model Technician {
   inspections  Inspection[]
   timeEntries  TimeEntry[]
 
+  runs        ProductionRun[]
   shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
   shopId String
 
@@ -227,6 +233,9 @@ model Customer {
 
   portalUser    User?
   vehicles      Vehicle[]
+  products      Part[]
+  jobs          ProductionJob[]
+  shipments     Shipment[]
   workOrders    WorkOrder[]
   appointments  Appointment[]
   invoices      Invoice[]
@@ -265,6 +274,7 @@ model Vehicle {
   inspections  Inspection[]
   reminders    MaintenanceReminder[]
   machine      Machine?
+  die          Die?
 
   shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
   shopId String
@@ -516,6 +526,12 @@ model Supplier {
   @@index([shopId])
 }
 
+enum PartKind {
+  STOCK     // purchased parts & supplies
+  MATERIAL  // raw material: coil, sheet, bar (tracked in `unit`)
+  PRODUCT   // a part this shop makes (finished goods)
+}
+
 model Part {
   id             String   @id @default(cuid())
   sku            String
@@ -523,6 +539,24 @@ model Part {
   description    String?
   category       String?
   brand          String?
+  kind           PartKind @default(STOCK)
+  unit           String   @default("ea")
+  // products: who orders it, their part number, how it is made
+  customer           Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customerId         String?
+  customerPartNumber String?
+  die                Die?      @relation(fields: [dieId], references: [id], onDelete: SetNull)
+  dieId              String?
+  press              Machine?  @relation("productPress", fields: [pressId], references: [id], onDelete: SetNull)
+  pressId            String?
+  material           Part?     @relation("productMaterial", fields: [materialPartId], references: [id], onDelete: SetNull)
+  materialPartId     String?
+  madeFrom           Part[]    @relation("productMaterial")
+  materialPerPiece   Decimal?  @db.Decimal(12, 4)
+  stdRatePerHour     Int?
+  packQty            Int?
+  jobs               ProductionJob[]
+  shipmentLines      ShipmentLine[]
   location       String?
   quantityOnHand Int      @default(0)
   reorderPoint   Int      @default(0)
@@ -558,6 +592,161 @@ model StockMovement {
   partId String
 }
 
+// ============================ Press shop production ============================
+
+enum DieStatus {
+  ACTIVE
+  MAINTENANCE
+  RETIRED
+}
+
+/** Tooling: a die / mould / fixture with a hit counter fed by press counts. */
+model Die {
+  id                  String    @id @default(cuid())
+  code                String
+  name                String
+  status              DieStatus @default(ACTIVE)
+  location            String?
+  hitCount            Int       @default(0)
+  hitsAtService       Int       @default(0)
+  serviceIntervalHits Int?
+  notes               String?
+  createdAt           DateTime  @default(now())
+
+  // where it is mounted right now
+  machine   Machine? @relation(fields: [machineId], references: [id], onDelete: SetNull)
+  machineId String?
+  // asset record for maintenance jobs (same pattern as machines)
+  asset   Vehicle? @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  assetId String?  @unique
+
+  products Part[]
+  jobs     ProductionJob[]
+  runs     ProductionRun[]
+
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@unique([shopId, code])
+  @@index([shopId])
+}
+
+enum JobStatus {
+  PLANNED
+  RELEASED
+  RUNNING
+  PAUSED
+  COMPLETE
+  CANCELLED
+}
+
+/** A production order: make `quantity` of a product for a customer. */
+model ProductionJob {
+  id          String    @id @default(cuid())
+  number      Int
+  status      JobStatus @default(PLANNED)
+  priority    Int       @default(0)
+  quantity    Int
+  good        Int       @default(0)
+  scrap       Int       @default(0)
+  shipped     Int       @default(0)
+  materialUsed Decimal? @db.Decimal(12, 4)
+  customerPo  String?
+  dueAt       DateTime?
+  notes       String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  customer   Customer @relation(fields: [customerId], references: [id])
+  customerId String
+  part       Part     @relation(fields: [partId], references: [id])
+  partId     String
+  machine    Machine? @relation(fields: [machineId], references: [id], onDelete: SetNull)
+  machineId  String?
+  die        Die?     @relation(fields: [dieId], references: [id], onDelete: SetNull)
+  dieId      String?
+
+  runs          ProductionRun[]
+  shipmentLines ShipmentLine[]
+
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@unique([shopId, number])
+  @@index([shopId, status])
+  @@index([machineId, status])
+}
+
+/** One stretch of a job on a press (a shift, typically): counts, downtime, operator. */
+model ProductionRun {
+  id              String    @id @default(cuid())
+  shift           String?
+  operator        String?
+  startedAt       DateTime  @default(now())
+  endedAt         DateTime?
+  good            Int       @default(0)
+  scrap           Int       @default(0)
+  downtimeMinutes Int       @default(0)
+  downtimeReason  String?
+  notes           String?
+
+  job          ProductionJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId        String
+  machine      Machine       @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  machineId    String
+  die          Die?          @relation(fields: [dieId], references: [id], onDelete: SetNull)
+  dieId        String?
+  technician   Technician?   @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  technicianId String?
+
+  @@index([jobId])
+  @@index([machineId, startedAt])
+}
+
+enum ShipmentStatus {
+  DRAFT
+  SHIPPED
+}
+
+/** Finished goods leaving the building; invoiced from here. */
+model Shipment {
+  id        String         @id @default(cuid())
+  number    Int
+  status    ShipmentStatus @default(DRAFT)
+  shipDate  DateTime?
+  carrier   String?
+  tracking  String?
+  shipTo    String?
+  notes     String?
+  createdAt DateTime       @default(now())
+
+  customer   Customer       @relation(fields: [customerId], references: [id])
+  customerId String
+  lines      ShipmentLine[]
+  invoice    Invoice?
+
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@unique([shopId, number])
+  @@index([shopId])
+}
+
+model ShipmentLine {
+  id        String  @id @default(cuid())
+  quantity  Int
+  unitPrice Decimal @default(0) @db.Decimal(12, 2)
+
+  shipment   Shipment       @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId String
+  part       Part           @relation(fields: [partId], references: [id])
+  partId     String
+  job        ProductionJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  jobId      String?
+}
+
 // ============================ Billing ============================
 
 enum InvoiceStatus {
@@ -586,9 +775,11 @@ model Invoice {
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
 
-  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
-  workOrderId String    @unique
-  customer    Customer  @relation(fields: [customerId], references: [id])
+  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id])
+  workOrderId String?    @unique
+  shipment    Shipment?  @relation(fields: [shipmentId], references: [id])
+  shipmentId  String?    @unique
+  customer    Customer   @relation(fields: [customerId], references: [id])
   customerId  String
   payments    Payment[]
 
@@ -702,6 +893,8 @@ model ShopSettings {
   lastDigestAt     DateTime?
   // the shop's own Twilio number (E.164) so inbound texts land in Messages
   smsNumber        String?
+  // production shifts [{ name, start: "06:00", end: "14:00" }]
+  shifts           Json?
 }
 
 // Shop-defined inspection checklist (used to build every new inspection)
@@ -894,6 +1087,10 @@ model Machine {
   line          ProductionLine? @relation(fields: [lineId], references: [id], onDelete: SetNull)
   lineId        String?
   events        MachineEvent[]
+  products      Part[]          @relation("productPress")
+  jobs          ProductionJob[]
+  runs          ProductionRun[]
+  dies          Die[]
 
   shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
   shopId String

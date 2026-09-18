@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, CreditCard } from "lucide-react";
 import { startCardPayment } from "@/actions/portal";
 import { requireCustomer } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { invoiceView } from "@/lib/invoice-view";
 import { getSettings } from "@/lib/settings";
 import { InvoiceSheet } from "@/components/app/invoice-sheet";
 import { PrintButton } from "@/components/app/print-button";
@@ -15,8 +15,9 @@ export default async function PortalInvoicePage({ params, searchParams }: { para
   const settings = await getSettings();
   const { id } = await params;
   const sp = await searchParams;
-  const inv = await db.invoice.findUnique({ where: { id }, include: { customer: true, workOrder: { include: { vehicle: true, lines: { orderBy: { sortOrder: "asc" } } } } } });
-  if (!inv || inv.customerId !== user.customerId) notFound();
+  const view = await invoiceView(id);
+  if (!view || view.inv.customerId !== user.customerId) notFound();
+  const { inv } = view;
   const balance = Number(inv.total) - Number(inv.amountPaid);
 
   return (
@@ -29,15 +30,16 @@ export default async function PortalInvoicePage({ params, searchParams }: { para
         kind="INVOICE"
         settings={settings}
         number={inv.number}
-        workOrderNumber={inv.workOrder.number}
+        workOrderNumber={view.workOrderNumber}
+        reference={view.reference}
         date={inv.issuedAt}
         dueAt={inv.dueAt}
         customer={inv.customer}
-        vehicle={inv.workOrder.vehicle}
-        lines={inv.workOrder.lines}
-        complaint={inv.workOrder.complaint}
-        diagnosis={inv.workOrder.diagnosis}
-        mileageIn={inv.workOrder.mileageIn}
+        vehicle={view.vehicle}
+        lines={view.lines}
+        complaint={view.complaint}
+        diagnosis={view.diagnosis}
+        mileageIn={view.mileageIn}
         amountPaid={Number(inv.amountPaid)}
         notes={inv.notes}
       />

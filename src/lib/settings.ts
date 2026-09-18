@@ -36,6 +36,7 @@ export type ShopSettings = {
   digestHour: number;
   smsNumber: string | null;
   vertical: string;
+  shifts: unknown;
   /** effective vocabulary for the serviced asset (business type + overrides) */
   terms: Terms;
   /** the shop has entered its own Stripe keys (secrets never leave the server) */
@@ -46,7 +47,7 @@ export type ShopSettings = {
 export const PLATFORM_DEFAULTS: ShopSettings = {
   id: "", shopId: "", name: "NexDrive Automotive OS", tagline: "Complete automotive business management software", phone: null, email: null, address: null, city: null, state: null, zip: null, website: null,
   taxRate: 0, laborRate: 0, shopFeeRate: 0, openTime: "08:00", closeTime: "18:00", invoiceFooter: null, logoUrl: null, accentColor: "#2f7cf6", currency: "USD", timezone: "America/New_York",
-  modules: [...ALL_MODULE_KEYS], approvalMessage: null, portalWelcome: null, templates: null, onlineBooking: false, bookingNotes: null, dailyDigest: false, digestHour: 18, smsNumber: null, vertical: DEFAULT_VERTICAL, terms: termsFor(DEFAULT_VERTICAL), stripeConfigured: false,
+  modules: [...ALL_MODULE_KEYS], approvalMessage: null, portalWelcome: null, templates: null, onlineBooking: false, bookingNotes: null, dailyDigest: false, digestHour: 18, smsNumber: null, vertical: DEFAULT_VERTICAL, shifts: null, terms: termsFor(DEFAULT_VERTICAL), stripeConfigured: false,
 };
 
 /** Shop settings, memoised per request *per shop* (the root layout may run with no shop context). */
@@ -57,7 +58,13 @@ export async function getSettings(): Promise<ShopSettings> {
 }
 
 const loadSettings = cache(async (shopId: string): Promise<ShopSettings> => {
-  const row = (await db.shopSettings.findFirst({ where: { shopId } })) ?? (await db.shopSettings.create({ data: { shopId } }));
+  let row = await db.shopSettings.findFirst({ where: { shopId } });
+  if (!row) {
+    // a stale session can point at a shop that no longer exists (reseed, deleted shop): behave like signed out
+    const exists = await db.shop.findUnique({ where: { id: shopId }, select: { id: true } });
+    if (!exists) return PLATFORM_DEFAULTS;
+    row = await db.shopSettings.create({ data: { shopId } });
+  }
   const { stripeSecretKey, stripeWebhookSecret, lastDigestAt: _lastDigestAt, ...safe } = row;
   void _lastDigestAt;
   return {

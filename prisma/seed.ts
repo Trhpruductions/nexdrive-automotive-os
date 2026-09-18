@@ -6,6 +6,8 @@ import { createHash } from "node:crypto";
 import { addDays, addHours, addMinutes, isWeekend, setHours, setMinutes, startOfDay, subDays, subMinutes } from "date-fns";
 import { computeTotals } from "../src/lib/money";
 import { DEFAULT_CANNED_SERVICES, DEFAULT_INSPECTION_TEMPLATE } from "../src/lib/defaults";
+import { getVertical } from "../src/lib/verticals";
+import { ALL_MODULE_KEYS as ALL_MODULE_KEYS_FOR_SEED } from "../src/lib/constants";
 
 const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
 
@@ -27,6 +29,16 @@ async function main() {
   await db.$transaction([
     db.payment.deleteMany(),
     db.invoice.deleteMany(),
+    db.shipmentLine.deleteMany(),
+    db.shipment.deleteMany(),
+    db.productionRun.deleteMany(),
+    db.productionJob.deleteMany(),
+    db.die.deleteMany(),
+    db.purchaseOrderLine.deleteMany(),
+    db.purchaseOrder.deleteMany(),
+    db.jobRun.deleteMany(),
+    db.passwordResetToken.deleteMany(),
+    db.shopMember.deleteMany(),
     db.inspectionItem.deleteMany(),
     db.inspection.deleteMany(),
     db.timeEntry.deleteMany(),
@@ -534,13 +546,73 @@ async function main() {
   await db.workOrder.create({ data: { shopId: demo.id, number: 1, customerId: demoCustomer.id, vehicleId: demoVehicle.id, complaint: "Oil change and tire rotation", mileageIn: 78400, status: "APPROVED", approvedAt: today, approvedBy: "Pat Nguyen (in person)", lines: { create: [{ kind: "LABOR", description: "Full synthetic oil change", quantity: 0.5, hours: 0.5, unitPrice: 95, taxable: false, sortOrder: 0 }, { kind: "FEE", description: "Oil & filter", quantity: 1, unitPrice: 54.99, taxable: true, sortOrder: 1 }] } } });
   await db.shop.update({ where: { id: demo.id }, data: { woSeq: 1 } });
 
+
+  // ── A metal stamping shop: presses, dies, products, material, jobs (owner: press@nexdrive.app) ──
+  const stamping = getVertical("stamping");
+  const press = await db.shop.create({ data: { slug: "roswell-press", name: "Roswell Press & Stamping", plan: "PRO", status: "ACTIVE", ownerEmail: "press@nexdrive.app", jobSeq: 4, shipSeq: 1 } });
+  await db.shopSettings.create({ data: { shopId: press.id, name: "Roswell Press & Stamping", tagline: "Precision stamped parts since 1987", phone: "(575) 555-0400", email: "orders@roswellpress.example", address: "1800 Industrial Ave", city: "Roswell", state: "NM", zip: "88203", accentColor: "#0ea5e9", taxRate: 0.0, laborRate: 85, vertical: "stamping", modules: ALL_MODULE_KEYS_FOR_SEED.filter((m) => !stamping.modulesOff.includes(m)), shifts: [{ name: "1st", start: "06:00", end: "14:00" }, { name: "2nd", start: "14:00", end: "22:00" }], openTime: "06:00", closeTime: "22:00" } });
+  await db.user.create({ data: { shopId: press.id, email: "press@nexdrive.app", passwordHash: hash, name: "Ray Alvarez", role: "OWNER" } });
+  const opUser = await db.user.create({ data: { shopId: press.id, email: "operator@roswellpress.example", passwordHash: hash, name: "Luis Chavez", role: "TECHNICIAN" } });
+  const op = await db.technician.create({ data: { shopId: press.id, name: "Luis Chavez", specialty: "Press operator / setup", color: "#0ea5e9", hourlyRate: 28, userId: opUser.id } });
+  await db.bay.createMany({ data: [{ shopId: press.id, name: "Press bay A" }, { shopId: press.id, name: "Tool room" }] });
+  await db.inspectionTemplateItem.createMany({ data: stamping.inspection.flatMap(([category, items], ci) => items.map((name, i) => ({ shopId: press.id, category, name, sortOrder: ci * 100 + i }))) });
+  await db.cannedService.createMany({ data: stamping.cannedServices.map((c) => ({ ...c, shopId: press.id })) });
+  const PRESS_KEY = "nd_demo_roswellpress_feed_key";
+  const pressFeed = await db.integration.create({ data: { shopId: press.id, name: "Press PLC gateway (demo)", type: "WEBHOOK", keyHash: createHash("sha256").update(PRESS_KEY).digest("hex"), keyPrefix: PRESS_KEY.slice(0, 10), config: {}, lastSeenAt: new Date(), eventCount: 0 } });
+  const lineA = await db.productionLine.create({ data: { shopId: press.id, name: "Line A — progressive", targetPerHour: 1800, sortOrder: 0 } });
+  const lineB = await db.productionLine.create({ data: { shopId: press.id, name: "Line B — transfer", targetPerHour: 600, sortOrder: 1 } });
+  const p1 = await db.machine.create({ data: { shopId: press.id, code: "PRESS-01", name: "Minster 200T straight-side", type: "Mechanical press 200T", status: "RUNNING", lineId: lineA.id, integrationId: pressFeed.id, lastHeartbeatAt: new Date(), lastStatusChangeAt: subMinutes(new Date(), 95), metrics: { run_hours: { value: 18422, unit: "h", at: new Date().toISOString() }, spm: { value: 42, unit: "spm", at: new Date().toISOString() } } } });
+  const p2 = await db.machine.create({ data: { shopId: press.id, code: "PRESS-02", name: "Aida 400T servo", type: "Servo press 400T", status: "IDLE", lineId: lineA.id, integrationId: pressFeed.id, lastHeartbeatAt: new Date(), lastStatusChangeAt: subMinutes(new Date(), 20), metrics: { run_hours: { value: 6210, unit: "h", at: new Date().toISOString() } } } });
+  const p3 = await db.machine.create({ data: { shopId: press.id, code: "PRESS-03", name: "Komatsu 800T transfer", type: "Transfer press 800T", status: "DOWN", lineId: lineB.id, integrationId: pressFeed.id, lastHeartbeatAt: new Date(), lastStatusChangeAt: subMinutes(new Date(), 40), metrics: { run_hours: { value: 24980, unit: "h", at: new Date().toISOString() } } } });
+  await db.machineEvent.createMany({ data: [
+    { machineId: p1.id, type: "STATUS", status: "RUNNING", occurredAt: subMinutes(new Date(), 95) },
+    { machineId: p2.id, type: "STATUS", status: "IDLE", occurredAt: subMinutes(new Date(), 20), message: "Die change" },
+    { machineId: p3.id, type: "STATUS", status: "DOWN", occurredAt: subMinutes(new Date(), 40), message: "Hydraulic overload" },
+    { machineId: p3.id, type: "ALARM", code: "H-22", message: "Hydraulic overload tripped on station 3", occurredAt: subMinutes(new Date(), 40) },
+  ] });
+  // dies
+  const dieBracket = await db.die.create({ data: { shopId: press.id, code: "D-1042", name: "Bracket progressive die (6 stations)", location: "Rack B-3", hitCount: 412300, hitsAtService: 250000, serviceIntervalHits: 200000, machineId: p1.id, notes: "Shut height 320 mm, feed pitch 45 mm, 180T" } });
+  const dieClip = await db.die.create({ data: { shopId: press.id, code: "D-0877", name: "Spring clip die", location: "Rack A-1", hitCount: 88400, hitsAtService: 0, serviceIntervalHits: 150000 } });
+  const dieHousing = await db.die.create({ data: { shopId: press.id, code: "D-2210", name: "Motor housing draw die", location: "Line B", hitCount: 31200, hitsAtService: 0, serviceIntervalHits: 60000, machineId: p3.id } });
+  // customers (B2B)
+  const aztec = await db.customer.create({ data: { shopId: press.id, firstName: "Purchasing", lastName: "Dept", company: "Aztec Truck Bodies", email: "po@aztectruck.example", phone: "(505) 555-0142", address: "4400 Commerce Dr", city: "Albuquerque", state: "NM", zip: "87109", taxExempt: true } });
+  const vega = await db.customer.create({ data: { shopId: press.id, firstName: "Sam", lastName: "Ortiz", company: "Vega Motors", email: "sortiz@vegamotors.example", phone: "(806) 555-0177", address: "12 Plant Rd", city: "Lubbock", state: "TX", zip: "79401", taxExempt: true } });
+  // material + products
+  const coil = await db.part.create({ data: { shopId: press.id, sku: "COIL-CRS-3.0-150", name: "CRS coil 3.0 mm x 150 mm", kind: "MATERIAL", unit: "lb", category: "Coil", quantityOnHand: 9800, reorderPoint: 4000, cost: 0.62, price: 0, location: "Coil yard" } });
+  const coilGalv = await db.part.create({ data: { shopId: press.id, sku: "COIL-GALV-1.2-80", name: "Galvanised coil 1.2 mm x 80 mm", kind: "MATERIAL", unit: "lb", category: "Coil", quantityOnHand: 2200, reorderPoint: 2500, cost: 0.71, price: 0, location: "Coil yard" } });
+  const bracket = await db.part.create({ data: { shopId: press.id, sku: "BRK-4471-A", name: "Mounting bracket, 3 mm CRS", kind: "PRODUCT", unit: "ea", category: "Brackets", customerId: aztec.id, customerPartNumber: "ATB-88-4471", dieId: dieBracket.id, pressId: p1.id, materialPartId: coil.id, materialPerPiece: 0.42, stdRatePerHour: 1800, packQty: 500, price: 1.85, cost: 0.74, quantityOnHand: 1250, reorderPoint: 1000, location: "FG-12" } });
+  const clip = await db.part.create({ data: { shopId: press.id, sku: "CLP-0877", name: "Spring clip, galvanised", kind: "PRODUCT", unit: "ea", category: "Clips", customerId: vega.id, customerPartNumber: "VM-CL-877", dieId: dieClip.id, pressId: p2.id, materialPartId: coilGalv.id, materialPerPiece: 0.06, stdRatePerHour: 4200, packQty: 2000, price: 0.22, cost: 0.09, quantityOnHand: 6400, reorderPoint: 5000, location: "FG-03" } });
+  const housing = await db.part.create({ data: { shopId: press.id, sku: "HSG-2210", name: "Motor housing, deep draw", kind: "PRODUCT", unit: "ea", category: "Housings", customerId: vega.id, customerPartNumber: "VM-HSG-2210", dieId: dieHousing.id, pressId: p3.id, materialPartId: coil.id, materialPerPiece: 1.9, stdRatePerHour: 520, packQty: 48, price: 7.4, cost: 3.1, quantityOnHand: 96, reorderPoint: 100, location: "FG-20" } });
+  // jobs: one running on PRESS-01, one released, one complete & partly shipped, one planned
+  const jobRunning = await db.productionJob.create({ data: { shopId: press.id, number: 1, status: "RUNNING", customerId: aztec.id, partId: bracket.id, quantity: 20000, good: 12850, scrap: 190, customerPo: "ATB-PO-77120", dueAt: addDays(today, 3), priority: 2, machineId: p1.id, dieId: dieBracket.id, startedAt: subDays(today, 1), runs: { create: [
+    { machineId: p1.id, dieId: dieBracket.id, technicianId: op.id, operator: "Luis Chavez", shift: "1st", startedAt: setMinutes(setHours(subDays(today, 1), 6), 5), endedAt: setMinutes(setHours(subDays(today, 1), 13), 55), good: 7200, scrap: 110, downtimeMinutes: 35, downtimeReason: "Coil change" },
+    { machineId: p1.id, dieId: dieBracket.id, operator: "Night crew", shift: "2nd", startedAt: setMinutes(setHours(subDays(today, 1), 14), 0), endedAt: setMinutes(setHours(subDays(today, 1), 21), 50), good: 4100, scrap: 60, downtimeMinutes: 20, downtimeReason: "Sensor fault" },
+    { machineId: p1.id, dieId: dieBracket.id, technicianId: op.id, operator: "Luis Chavez", shift: "1st", startedAt: subMinutes(new Date(), 95), good: 1550, scrap: 20 },
+  ] } } });
+  const jobDone = await db.productionJob.create({ data: { shopId: press.id, number: 2, status: "COMPLETE", customerId: vega.id, partId: clip.id, quantity: 10000, good: 10040, scrap: 85, shipped: 6000, customerPo: "VM-4410", dueAt: subDays(today, 2), machineId: p2.id, dieId: dieClip.id, startedAt: subDays(today, 4), completedAt: subDays(today, 2), materialUsed: 607.5, runs: { create: [
+    { machineId: p2.id, dieId: dieClip.id, operator: "Luis Chavez", shift: "1st", startedAt: setHours(subDays(today, 4), 6), endedAt: setHours(subDays(today, 4), 14), good: 5900, scrap: 40, downtimeMinutes: 25, downtimeReason: "Die change" },
+    { machineId: p2.id, dieId: dieClip.id, operator: "Night crew", shift: "2nd", startedAt: setHours(subDays(today, 3), 14), endedAt: setHours(subDays(today, 3), 21), good: 4140, scrap: 45 },
+  ] } } });
+  await db.productionJob.create({ data: { shopId: press.id, number: 3, status: "RELEASED", customerId: vega.id, partId: housing.id, quantity: 1200, customerPo: "VM-4432", dueAt: addDays(today, 6), machineId: p3.id, dieId: dieHousing.id, notes: "Waiting on PRESS-03 hydraulic repair" } });
+  await db.productionJob.create({ data: { shopId: press.id, number: 4, status: "PLANNED", customerId: aztec.id, partId: bracket.id, quantity: 15000, customerPo: "ATB-PO-77188", dueAt: addDays(today, 12) } });
+  // one shipment already out and invoiced
+  const ship1 = await db.shipment.create({ data: { shopId: press.id, number: 1, status: "SHIPPED", customerId: vega.id, shipDate: subDays(today, 1), carrier: "Saia LTL", tracking: "SAIA-7741-2201", shipTo: "Vega Motors\nDock 4, 12 Plant Rd\nLubbock, TX 79401", lines: { create: [{ partId: clip.id, jobId: jobDone.id, quantity: 6000, unitPrice: 0.22 }] } } });
+  await db.invoice.create({ data: { shopId: press.id, number: 1, shipmentId: ship1.id, customerId: vega.id, status: "SENT", issuedAt: subDays(today, 1), dueAt: addDays(today, 29), subtotal: 1320, discount: 0, taxRate: 0, tax: 0, total: 1320, payToken: "demo-press-inv-1" } });
+  await db.shop.update({ where: { id: press.id }, data: { invSeq: 1 } });
+  await db.stockMovement.createMany({ data: [
+    { partId: clip.id, delta: 10040, reason: "Produced", reference: "JOB-00002", createdAt: subDays(today, 2) },
+    { partId: clip.id, delta: -6000, reason: "Shipped", reference: "SH-00001", createdAt: subDays(today, 1) },
+    { partId: coilGalv.id, delta: -608, reason: "Consumed in production", reference: "JOB-00002", createdAt: subDays(today, 2) },
+  ] });
+  void jobRunning;
+
   const counts = {
     users: await db.user.count(), customers: await db.customer.count(), vehicles: await db.vehicle.count(),
     workOrders: await db.workOrder.count(), invoices: await db.invoice.count(), appointments: await db.appointment.count(), parts: await db.part.count(),
   };
   console.log("Seeded:", counts);
   console.log(`\nDemo webhook key (Settings > Integrations): ${DEMO_KEY}`);
-  console.log(`\nLogins (password: ${DEMO_PASSWORD})\n  admin@nexdrive.app        NexDrive platform admin (/admin)\n  owner@plexroswell.com     Plex Roswell - Shop Owner\n  advisor@plexroswell.com   Plex Roswell - Service Advisor\n  mike@plexroswell.com      Plex Roswell - Technician\n  john.smith@example.com    Plex Roswell - Customer portal\n  demo@nexdrive.app         Demo Tire & Lube - Shop Owner (second shop)`);
+  console.log(`\nLogins (password: ${DEMO_PASSWORD})\n  admin@nexdrive.app        NexDrive platform admin (/admin)\n  owner@plexroswell.com     Plex Roswell - Shop Owner\n  advisor@plexroswell.com   Plex Roswell - Service Advisor\n  mike@plexroswell.com      Plex Roswell - Technician\n  john.smith@example.com    Plex Roswell - Customer portal\n  demo@nexdrive.app         Demo Tire & Lube - Shop Owner (second shop)\n  press@nexdrive.app        Roswell Press & Stamping - Owner (press shop demo; feed key nd_demo_roswellpress_feed_key)`);
 }
 
 main()

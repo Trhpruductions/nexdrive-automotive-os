@@ -34,7 +34,7 @@ export async function voidInvoice(invoiceId: string) {
   if (inv.payments.length) redirect(`/invoices/${invoiceId}?error=Invoices+with+payments+cannot+be+voided`);
   await db.$transaction([
     db.invoice.update({ where: { id: invoiceId }, data: { status: "VOID" } }),
-    db.workOrder.update({ where: { id: inv.workOrderId }, data: { status: "COMPLETED" } }),
+    ...(inv.workOrderId ? [db.workOrder.update({ where: { id: inv.workOrderId }, data: { status: "COMPLETED" } })] : []),
   ]);
   await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "void", entity: "Invoice", entityId: invoiceId } });
   revalidatePath(`/invoices/${invoiceId}`);
