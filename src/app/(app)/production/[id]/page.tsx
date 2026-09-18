@@ -7,7 +7,9 @@ import { db } from "@/lib/db";
 import { Badge, Card, Flash, PageHeader, Stat } from "@/components/ui";
 import { ConfirmButton } from "@/components/app/confirm-button";
 import { BarChart } from "@/components/app/revenue-chart";
-import { deleteMachine, saveMachine, setMachineStatus } from "@/actions/integrations";
+import { createMachineJob, deleteMachine, linkMachineAsset, saveMachine, setMachineStatus } from "@/actions/integrations";
+import { getSettings } from "@/lib/settings";
+import { Wrench } from "lucide-react";
 import { fmtDateTime, fmtRelative } from "@/lib/format";
 import type { MachineStatus } from "@/generated/prisma/enums";
 
@@ -24,11 +26,15 @@ export default async function MachinePage({ params, searchParams }: { params: Pr
   const { id } = await params;
   const sp = await searchParams;
   const now = new Date();
-  const [m, lines] = await Promise.all([
-    db.machine.findUnique({ where: { id }, include: { line: true, integration: { select: { name: true, type: true } }, events: { orderBy: { occurredAt: "desc" }, take: 60 } } }),
+  const [m, lines, settings] = await Promise.all([
+    db.machine.findUnique({ where: { id }, include: { line: true, integration: { select: { name: true, type: true } }, events: { orderBy: { occurredAt: "desc" }, take: 60 }, asset: { include: { workOrders: { where: { status: { notIn: ["INVOICED", "CANCELLED"] } }, orderBy: { createdAt: "desc" }, take: 1 }, reminders: { where: { completed: false }, orderBy: { dueAtMileage: "asc" }, take: 3 } } } } }),
     db.productionLine.findMany({ orderBy: { name: "asc" } }),
+    getSettings(),
   ]);
   if (!m) notFound();
+  const assets = await db.vehicle.findMany({ where: { OR: [{ machine: null }, { id: m.assetId ?? "" }] }, orderBy: [{ make: "asc" }, { model: "asc" }], select: { id: true, year: true, make: true, model: true, vin: true }, take: 200 });
+  const openJob = m.asset?.workOrders[0] ?? null;
+  const hoursNow = (m.metrics as Record<string, { value?: number; unit?: string | null }>)[m.hoursMetric]?.value;
 
   // hourly counts for the last 24h
   const since = subHours(now, 23);
@@ -96,6 +102,45 @@ export default async function MachinePage({ params, searchParams }: { params: Pr
                 </ul>
               </>
             ) : <p className="text-sm text-muted">No status history yet.</p>}
+          </Card>
+          <Card title="Maintenance" action={openJob ? <Badge tone="amber">job open</Badge> : null}>
+            {m.asset ? (
+              <div className="text-sm space-y-2">
+                <div>Asset record: <Link href={`/vehicles/${m.asset.id}`} className="text-accent hover:underline">{m.asset.year} {m.asset.make} {m.asset.model}</Link><span className="text-muted"> · {settings.terms.odometer ?? "Hours"} {m.asset.mileage.toLocaleString()}{hoursNow != null ? ` (feed ${Math.round(hoursNow)})` : ""}</span></div>
+                {openJob ? (
+                  <div>Open job: <Link href={`/work-orders/${openJob.id}`} className="text-accent hover:underline">WO-{String(openJob.number).padStart(5, "0")}</Link> <span className="text-muted">· {openJob.status.replace("_", " ").toLowerCase()} · {openJob.complaint}</span></div>
+                ) : (
+                  <form action={createMachineJob.bind(null, m.id)} className="flex gap-2">
+                    <input name="complaint" className="input" placeholder="What needs doing?" />
+                    <button className="btn btn-primary shrink-0"><Wrench size={14} /> Open job</button>
+                  </form>
+                )}
+                {m.asset.reminders.length ? <ul className="text-xs text-muted">{m.asset.reminders.map((r) => <li key={r.id}>PM due: {r.service}{r.dueAtMileage != null ? ` at ${r.dueAtMileage.toLocaleString()} h` : ""}{r.dueAtDate ? ` by ${r.dueAtDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}</li>)}</ul> : <p className="text-xs text-faint">No PM schedule yet — invoice a service package with an interval, or add a reminder on the asset record.</p>}
+              </div>
+            ) : (
+              <div className="text-sm space-y-2">
+                <p className="text-muted">Tie this machine to an asset record to open maintenance jobs, track history and get PM reminders from run-hours.</p>
+                <form action={createMachineJob.bind(null, m.id)} className="flex gap-2">
+                  <input name="complaint" className="input" placeholder="What needs doing?" />
+                  <button className="btn btn-primary shrink-0"><Wrench size={14} /> Open job</button>
+                </form>
+                <p className="text-[11px] text-faint">Opening a job creates the asset record automatically.</p>
+              </div>
+            )}
+            {manager ? (
+              <form action={linkMachineAsset.bind(null, m.id)} className="mt-4 pt-4 border-t border-border space-y-2">
+                <label className="block"><span className="label">Asset record</span>
+                  <select name="assetId" defaultValue={m.assetId ?? ""} className="select">
+                    <option value="">— none —</option>
+                    <option value="__new">Create from this machine</option>
+                    {assets.map((a) => <option key={a.id} value={a.id}>{a.year} {a.make} {a.model}{a.vin ? ` · ${a.vin}` : ""}</option>)}
+                  </select>
+                </label>
+                <label className="block"><span className="label">Run-hours metric name</span><input name="hoursMetric" defaultValue={m.hoursMetric} className="input font-mono" /></label>
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="autoWorkOrder" defaultChecked={m.autoWorkOrder} className="accent-[var(--accent)]" /> Open a job automatically on critical alarms</label>
+                <button className="btn btn-secondary btn-sm">Save maintenance settings</button>
+              </form>
+            ) : null}
           </Card>
           {manager ? (
             <Card title="Machine settings">

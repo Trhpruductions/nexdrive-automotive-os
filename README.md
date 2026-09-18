@@ -150,6 +150,10 @@ curl -X POST http://127.0.0.1:4500/api/ingest -H "Authorization: Bearer nd_demo_
 
 The **Production** page updates live (SSE) as events arrive. **Parts → Scan** works with any USB/Bluetooth barcode scanner for receiving and pulling stock.
 
+### Machines ↔ maintenance
+
+A machine on the live feed can be tied to an asset record (Production → machine → *Maintenance*): create the record from the machine or pick an existing one. From then on a **critical alarm opens a maintenance work order automatically** (one open job per machine, optional per machine), a `machine.reading` for the run-hours metric (`run_hours` by default, configurable) keeps the asset's counter current so **interval-based PM reminders fire from real run-hours**, *Open job* on the machine page creates a job by hand, and **completing the job releases the machine** from maintenance/down to idle with an event in its history. Jobs for in-house equipment bill to an internal "In-house" customer that is created on first use.
+
 ## Developer API & webhooks (connect other software)
 
 Settings → **API & Webhooks** issues keys for other systems (accounting, parts suppliers, CRMs, kiosks, Zapier…). Keys carry scopes — `read`, `write`, `ingest` — and are sent as `Authorization: Bearer nd_live_…`. `GET /api/v1` returns the endpoint index as JSON.

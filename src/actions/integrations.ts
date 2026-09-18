@@ -162,6 +162,32 @@ export async function saveMachine(formData: FormData) {
   redirect(`/production?ok=${encodeURIComponent(`${name} saved`)}`);
 }
 
+/** Machine page: open (or jump to) the maintenance job for this machine. */
+export async function createMachineJob(id: string, formData: FormData) {
+  const user = await requireStaff();
+  const { openMaintenanceJob } = await import("@/lib/maintenance");
+  const complaint = String(formData.get("complaint") ?? "").trim() || "Maintenance";
+  const { workOrder, created } = await openMaintenanceJob(id, { complaint, by: user.name, userId: user.id, source: "production page" });
+  revalidatePath("/production");
+  redirect(`/work-orders/${workOrder.id}?ok=${created ? "Maintenance+job+opened" : "This+machine+already+has+an+open+job"}`);
+}
+
+/** Machine page: link to an existing asset record, create one, or unlink. */
+export async function linkMachineAsset(id: string, formData: FormData) {
+  await requireStaff(MANAGER_ROLES);
+  const choice = String(formData.get("assetId") ?? "");
+  if (choice === "__new") {
+    const { assetForMachine } = await import("@/lib/maintenance");
+    await db.machine.update({ where: { id }, data: { assetId: null } });
+    await assetForMachine(id);
+  } else {
+    await db.machine.update({ where: { id }, data: { assetId: choice || null } });
+  }
+  await db.machine.update({ where: { id }, data: { autoWorkOrder: formData.get("autoWorkOrder") === "on", hoursMetric: String(formData.get("hoursMetric") ?? "run_hours").trim() || "run_hours" } });
+  revalidatePath(`/production/${id}`);
+  redirect(`/production/${id}?ok=Maintenance+settings+saved`);
+}
+
 export async function setMachineStatus(id: string, status: MachineStatus) {
   const user = await requireStaff();
   await db.machine.update({ where: { id }, data: { status, lastStatusChangeAt: new Date(), lastHeartbeatAt: new Date() } });

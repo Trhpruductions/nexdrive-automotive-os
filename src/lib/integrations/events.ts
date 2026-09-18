@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db, rawDb, currentShopId } from "@/lib/db";
 import { bus } from "./bus";
 import { emitWebhook } from "@/lib/webhooks";
+import { openMaintenanceJob, syncRunHours } from "@/lib/maintenance";
 import type { MachineStatus } from "@/generated/prisma/enums";
 
 /**
@@ -129,6 +130,7 @@ async function applyOne(ev: CanonicalEvent, ctx: { integrationId?: string; sourc
       const metrics = { ...(m.metrics as Record<string, unknown>), [ev.metric]: { value: ev.value, unit: ev.unit ?? null, at: at.toISOString() } };
       await db.machine.update({ where: { id: m.id }, data: { metrics: metrics as object } });
       await db.machineEvent.create({ data: { machineId: m.id, type: "READING", metric: ev.metric, value: ev.value, unit: ev.unit, occurredAt: at } });
+      await syncRunHours(m.id, ev.metric, ev.value).catch(() => null);
       result.touchedMachines.push(m.code);
       return;
     }
@@ -137,6 +139,9 @@ async function applyOne(ev: CanonicalEvent, ctx: { integrationId?: string; sourc
       await db.machineEvent.create({ data: { machineId: m.id, type: "ALARM", code: ev.code, message: ev.message, occurredAt: at, raw: ev as object } });
       emitWebhook("machine.alarm", { machineId: m.id, code: m.code, name: m.name, alarmCode: ev.code ?? null, message: ev.message, severity: ev.severity ?? "warning", at });
       if (ev.severity === "critical") await db.machine.update({ where: { id: m.id }, data: { status: "DOWN", lastStatusChangeAt: at } });
+      if (m.autoWorkOrder && ev.severity === "critical") {
+        await openMaintenanceJob(m.id, { complaint: `Alarm${ev.code ? ` ${ev.code}` : ""}: ${ev.message}`, source: `${ctx.source} alarm` }).catch((e) => console.error("[nexdrive] auto work order failed", e));
+      }
       result.touchedMachines.push(m.code);
       return;
     }

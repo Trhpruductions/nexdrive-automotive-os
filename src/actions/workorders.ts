@@ -258,6 +258,11 @@ export async function setWorkOrderStatus(id: string, status: WorkOrderStatus) {
     await db.timeEntry.updateMany({ where: { workOrderId: id, endedAt: null }, data: { endedAt: now } });
   }
   if (status === "COMPLETED") {
+    const machine = await db.machine.findFirst({ where: { assetId: wo.vehicleId, status: { in: ["MAINTENANCE", "DOWN"] } } });
+    if (machine) {
+      await db.machine.update({ where: { id: machine.id }, data: { status: "IDLE", lastStatusChangeAt: now } });
+      await db.machineEvent.create({ data: { machineId: machine.id, type: "STATUS", status: "IDLE", message: `Maintenance job WO-${String(wo.number).padStart(5, "0")} completed by ${user.name}` } });
+    }
     await db.appointment.updateMany({ where: { workOrderId: id }, data: { status: "COMPLETED" } });
     const t = await renderTemplate("vehicle_ready", { customer: wo.customer.firstName, vehicle: `${wo.vehicle.year} ${wo.vehicle.make} ${wo.vehicle.model}` });
     await queueNotification({ customerId: wo.customerId, workOrderId: id, ...t });

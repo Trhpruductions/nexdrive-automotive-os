@@ -249,6 +249,7 @@ model Vehicle {
   photos       VehiclePhoto[]
   inspections  Inspection[]
   reminders    MaintenanceReminder[]
+  machine      Machine?
 
   shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
   shopId String
@@ -861,6 +862,13 @@ model Machine {
   active             Boolean       @default(true)
   notes              String?
   createdAt          DateTime      @default(now())
+  // maintenance: the asset record that gets work orders / reminders for this machine
+  asset         Vehicle?  @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  assetId       String?   @unique
+  // open a maintenance work order automatically on critical alarms
+  autoWorkOrder Boolean   @default(false)
+  // which reading (metric name) is the machine's run-hours counter
+  hoursMetric   String    @default("run_hours")
 
   integration   Integration?    @relation(fields: [integrationId], references: [id], onDelete: SetNull)
   integrationId String?

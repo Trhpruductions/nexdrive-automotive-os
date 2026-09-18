@@ -43,7 +43,7 @@ export default async function WorkOrderPage({ params, searchParams }: { params: 
       where: { id },
       include: {
         customer: true,
-        vehicle: true,
+        vehicle: { include: { machine: { select: { id: true, code: true, status: true, line: { select: { name: true } } } } } },
         technician: true,
         bay: true,
         lines: { orderBy: { sortOrder: "asc" }, include: { part: { select: { sku: true } } } },
@@ -93,7 +93,7 @@ export default async function WorkOrderPage({ params, searchParams }: { params: 
     <div>
       <PageHeader
         title={<span className="flex items-center gap-3">{woNumber(wo.number)} <Badge tone={s.tone} className="text-xs">{s.label}</Badge></span>}
-        subtitle={<><Link href={`/vehicles/${wo.vehicleId}`} className="text-text hover:text-accent">{vehicleName(wo.vehicle)}</Link>{wo.vehicle.licensePlate ? ` · ${wo.vehicle.licensePlate}` : ""} · <Link href={`/customers/${wo.customerId}`} className="text-accent hover:underline">{wo.customer.firstName} {wo.customer.lastName}</Link>{wo.customer.phone ? ` · ${wo.customer.phone}` : ""}</>}
+        subtitle={<><Link href={`/vehicles/${wo.vehicleId}`} className="text-text hover:text-accent">{vehicleName(wo.vehicle)}</Link>{wo.vehicle.licensePlate ? ` · ${wo.vehicle.licensePlate}` : ""} · <Link href={`/customers/${wo.customerId}`} className="text-accent hover:underline">{wo.customer.firstName} {wo.customer.lastName}</Link>{wo.customer.phone ? ` · ${wo.customer.phone}` : ""}{wo.vehicle.machine ? <> · <Link href={`/production/${wo.vehicle.machine.id}`} className="text-accent hover:underline">Machine {wo.vehicle.machine.code}</Link>{wo.vehicle.machine.line ? ` (${wo.vehicle.machine.line.name})` : ""} <Badge tone={wo.vehicle.machine.status === "RUNNING" ? "green" : wo.vehicle.machine.status === "DOWN" ? "red" : wo.vehicle.machine.status === "MAINTENANCE" ? "amber" : "slate"}>{wo.vehicle.machine.status.toLowerCase()}</Badge></> : null}</>}
         crumbs={[{ label: "Work Orders", href: "/work-orders" }, { label: woNumber(wo.number) }]}
         actions={
           <>
