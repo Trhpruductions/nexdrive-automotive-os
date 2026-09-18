@@ -2,6 +2,7 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { rawDb, withShop } from "./db";
+import { rateLimit } from "./ratelimit";
 
 /**
  * Developer API (/api/v1). Keys are issued under Settings -> API & Webhooks and
@@ -35,6 +36,8 @@ export async function authenticate(req: NextRequest, scope: ApiScope): Promise<A
   if (row.expiresAt && row.expiresAt < new Date()) throw new ApiError(401, "API key has expired.", "unauthorized");
   if (row.shop.status === "SUSPENDED" || row.shop.status === "CANCELLED") throw new ApiError(403, "This shop's NexDrive account is suspended.", "forbidden");
   if (!row.scopes.includes(scope)) throw new ApiError(403, `This key lacks the "${scope}" scope.`, "forbidden");
+  const wait = rateLimit(`apikey:${row.id}`, 600, 60);
+  if (wait) throw new ApiError(429, `Rate limit: 600 requests per minute per key. Retry in ${wait}s.`, "rate_limited");
   rawDb.apiKey.update({ where: { id: row.id }, data: { lastUsedAt: new Date(), useCount: { increment: 1 } } }).catch(() => null);
   return { id: row.id, name: row.name, scopes: row.scopes, shopId: row.shopId };
 }

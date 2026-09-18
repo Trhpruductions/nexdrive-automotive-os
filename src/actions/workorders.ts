@@ -410,6 +410,34 @@ export async function deleteWorkOrder(id: string) {
   redirect("/work-orders?ok=Work+order+deleted");
 }
 
+/** Copy a line the customer declined on an earlier job onto this work order (deferred work). */
+export async function addDeferredLine(workOrderId: string, lineId: string, returnTo?: string) {
+  await requireStaff();
+  const [wo, src] = await Promise.all([db.workOrder.findUniqueOrThrow({ where: { id: workOrderId } }), db.workOrderLine.findUniqueOrThrow({ where: { id: lineId }, include: { part: true } })]);
+  if (["INVOICED", "CANCELLED"].includes(wo.status)) redirect(`/work-orders/${workOrderId}?error=This+work+order+is+closed`);
+  const count = await db.workOrderLine.count({ where: { workOrderId } });
+  await db.workOrderLine.create({
+    data: { workOrderId, kind: src.kind, description: src.description, quantity: src.quantity, hours: src.hours, unitPrice: src.kind === "PART" && src.part ? src.part.price : src.unitPrice, partId: src.partId, taxable: src.taxable, sortOrder: count, cannedServiceId: src.cannedServiceId },
+  });
+  await touch(workOrderId);
+  revalidatePath(`/work-orders/${workOrderId}`);
+  redirect(returnTo ?? `/work-orders/${workOrderId}?ok=Added+to+estimate#lines`);
+}
+
+/** Turn an inspection finding (urgent / attention) into a labor line on this work order. */
+export async function addFindingLine(workOrderId: string, itemId: string, returnTo?: string) {
+  await requireStaff();
+  const [wo, item, settings] = await Promise.all([db.workOrder.findUniqueOrThrow({ where: { id: workOrderId } }), db.inspectionItem.findUniqueOrThrow({ where: { id: itemId } }), getSettings()]);
+  if (["INVOICED", "CANCELLED"].includes(wo.status)) redirect(`/work-orders/${workOrderId}?error=This+work+order+is+closed`);
+  const count = await db.workOrderLine.count({ where: { workOrderId } });
+  await db.workOrderLine.create({
+    data: { workOrderId, kind: "LABOR", description: `${item.name}${item.notes ? ` — ${item.notes}` : ""}`, quantity: 1, hours: 1, unitPrice: settings.laborRate, taxable: false, sortOrder: count },
+  });
+  await touch(workOrderId);
+  revalidatePath(`/work-orders/${workOrderId}`);
+  redirect(returnTo ?? `/work-orders/${workOrderId}?ok=Added+to+estimate+%E2%80%94+adjust+hours+and+add+parts#lines`);
+}
+
 async function touch(workOrderId: string) {
   await db.workOrder.update({ where: { id: workOrderId }, data: { updatedAt: new Date() } });
 }

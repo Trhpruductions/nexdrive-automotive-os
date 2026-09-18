@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Minus, Pencil, Plus, Trash2 } from "lucide-react";
+import { Minus, Pencil, Plus, Tag, Trash2 } from "lucide-react";
 import { subDays } from "date-fns";
 import { requireStaff, can, MANAGER_ROLES } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -39,7 +39,7 @@ export default async function PartPage({ params, searchParams }: { params: Promi
         title={<span className="flex items-center gap-3">{p.name} {!p.active ? <Badge tone="slate">Archived</Badge> : low ? <Badge tone="amber">Low stock</Badge> : null}</span>}
         subtitle={<span className="font-mono">{p.sku}</span>}
         crumbs={[{ label: "Parts & Inventory", href: "/parts" }, { label: p.name }]}
-        actions={<Link href={`/parts/${p.id}/edit`} className="btn btn-primary"><Pencil size={15} /> Edit</Link>}
+        actions={<><Link href={`/parts/${p.id}/label`} className="btn btn-secondary"><Tag size={15} /> Labels</Link><Link href={`/parts/${p.id}/edit`} className="btn btn-primary"><Pencil size={15} /> Edit</Link></>}
       />
       <Flash searchParams={sp} />
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">

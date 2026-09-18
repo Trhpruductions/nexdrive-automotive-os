@@ -46,3 +46,18 @@ export async function requestAppointment(formData: FormData) {
   revalidatePath("/schedule");
   redirect("/portal?ok=Appointment+requested+%E2%80%94+we%27ll+confirm+it+shortly");
 }
+
+/** Customer keeps their own contact details current from the portal. */
+export async function updateMyContact(_prev: { error?: string; ok?: string } | undefined, formData: FormData): Promise<{ error?: string; ok?: string }> {
+  const user = await requireCustomer();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;
+  const phone = String(formData.get("phone") ?? "").trim() || null;
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: "Enter a valid email" };
+  if (!email && !phone) return { error: "Keep at least an email or a phone number so the shop can reach you" };
+  await db.customer.update({
+    where: { id: user.customerId },
+    data: { email, phone, address: String(formData.get("address") ?? "").trim() || null, city: String(formData.get("city") ?? "").trim() || null, state: String(formData.get("state") ?? "").trim() || null, zip: String(formData.get("zip") ?? "").trim() || null },
+  });
+  revalidatePath("/portal");
+  return { ok: "Contact details updated" };
+}

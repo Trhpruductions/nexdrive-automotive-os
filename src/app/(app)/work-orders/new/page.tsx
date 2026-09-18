@@ -5,14 +5,15 @@ import { NewWorkOrderForm } from "./new-form";
 
 export const metadata = { title: "New work order" };
 
-export default async function NewWorkOrderPage({ searchParams }: { searchParams: Promise<{ customerId?: string; vehicleId?: string; appointmentId?: string }> }) {
+export default async function NewWorkOrderPage({ searchParams }: { searchParams: Promise<{ customerId?: string; vehicleId?: string; appointmentId?: string; complaint?: string }> }) {
   await requireStaff();
   const sp = await searchParams;
   let customerId = sp.customerId;
   let vehicleId = sp.vehicleId;
-  let complaint = "";
+  let complaint = sp.complaint ?? "";
   let technicianId: string | undefined;
   let bayId: string | undefined;
+  if (vehicleId && !customerId) customerId = (await db.vehicle.findUnique({ where: { id: vehicleId }, select: { customerId: true } }))?.customerId;
   if (sp.appointmentId) {
     const a = await db.appointment.findUnique({ where: { id: sp.appointmentId } });
     if (a) {

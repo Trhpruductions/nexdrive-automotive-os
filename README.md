@@ -108,6 +108,11 @@ Around that core:
 - **Owner's daily digest** — an end-of-day email (collected, invoiced, completed, estimates going stale, parts to reorder, tomorrow's schedule), on by default under Settings → Business.
 - **Estimate follow-ups** — an estimate the customer hasn't answered in two days gets one "still thinking it over?" nudge with the approval link (`estimate_followup` template); re-sending the estimate resets it.
 - **Purchase orders by email** — *Mark as sent* emails the order sheet to the supplier when they have an email address and a mail provider is configured.
+- **Deferred & recommended work** — lines a customer declined on earlier jobs and urgent/attention inspection findings follow the vehicle: the vehicle page lists them, and an open work order shows *Suggested for this estimate* with one-click *Add to estimate* (a finding becomes a labor line to price up; a declined line comes back as it was).
+- **Technician efficiency** — Reports compare billed hours with clocked hours per technician.
+- **Part labels** — printable Code 128 bin labels (Avery 5160 layout) from any part; they scan on the Parts → Scan page.
+- **Portal self-service** — customers keep their own email, phone and address current under *My account*.
+- API keys are rate-limited to 600 requests/minute (HTTP 429 with a retry hint).
 
 ## Production lines & inventory feeds
 

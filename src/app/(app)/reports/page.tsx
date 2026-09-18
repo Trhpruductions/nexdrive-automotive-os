@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { differenceInDays, eachDayOfInterval, eachMonthOfInterval, endOfMonth, format, startOfDay, startOfMonth, subDays, subMonths } from "date-fns";
+import { differenceInDays, differenceInMinutes, eachDayOfInterval, eachMonthOfInterval, endOfMonth, format, startOfDay, startOfMonth, subDays, subMonths } from "date-fns";
 import { CircleDollarSign, Percent, Receipt, Users } from "lucide-react";
 import { requireStaff, MANAGER_ROLES } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -17,7 +17,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const since = subDays(startOfDay(now), days - 1);
   const prevSince = subDays(since, days);
 
-  const [payments, prevPayments, invoices, lines, custCount, newCustomers, techs, byStatus, months, openInvoices, taxRows, returningRows, partLines] = await Promise.all([
+  const [payments, prevPayments, invoices, lines, custCount, newCustomers, techs, byStatus, months, openInvoices, taxRows, returningRows, partLines, timeEntries] = await Promise.all([
     db.payment.findMany({ where: { paidAt: { gte: since } }, select: { amount: true, paidAt: true, method: true } }),
     db.payment.aggregate({ _sum: { amount: true }, where: { paidAt: { gte: prevSince, lt: since } } }),
     db.invoice.findMany({ where: { issuedAt: { gte: since }, status: { not: "VOID" } }, select: { total: true, tax: true, workOrder: { select: { technicianId: true, customerId: true } } } }),
@@ -31,6 +31,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     db.invoice.findMany({ where: { status: { not: "VOID" }, issuedAt: { gte: startOfMonth(subMonths(now, 5)) } }, select: { issuedAt: true, tax: true, subtotal: true, total: true } }),
     db.invoice.findMany({ where: { issuedAt: { lt: since }, status: { not: "VOID" } }, select: { customerId: true }, distinct: ["customerId"] }),
     db.workOrderLine.findMany({ where: { kind: "PART", approved: true, workOrder: { status: "INVOICED", invoice: { issuedAt: { gte: since }, status: { not: "VOID" } } } }, select: { quantity: true, unitPrice: true, part: { select: { category: true, cost: true } } } }),
+    db.timeEntry.findMany({ where: { startedAt: { gte: since } }, select: { technicianId: true, startedAt: true, endedAt: true } }),
   ]);
 
   const revenue = payments.reduce((s, p) => s + Number(p.amount), 0);
@@ -57,7 +58,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       const mine = lines.filter((l) => l.workOrder.technicianId === t.id);
       const hrs = mine.filter((l) => l.kind === "LABOR").reduce((s, l) => s + Number(l.hours ?? l.quantity), 0);
       const rev = invoices.filter((i) => i.workOrder.technicianId === t.id).reduce((s, i) => s + Number(i.total), 0);
-      return { ...t, hrs, rev, jobs: invoices.filter((i) => i.workOrder.technicianId === t.id).length };
+      const clocked = timeEntries.filter((e) => e.technicianId === t.id).reduce((s, e) => s + differenceInMinutes(e.endedAt ?? now, e.startedAt), 0) / 60;
+      return { ...t, hrs, rev, clocked, efficiency: clocked > 0 ? hrs / clocked : null, jobs: invoices.filter((i) => i.workOrder.technicianId === t.id).length };
     })
     .sort((a, b) => b.rev - a.rev);
   const topRev = techRows[0]?.rev || 1;
@@ -195,13 +197,15 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         </Card>
         <Card className="xl:col-span-3" title="Technician performance" padded={false}>
           <table className="table">
-            <thead><tr><th>Technician</th><th className="text-right">Jobs invoiced</th><th className="text-right">Billed hours</th><th className="text-right">Revenue</th><th className="w-1/3">Share</th></tr></thead>
+            <thead><tr><th>Technician</th><th className="text-right">Jobs invoiced</th><th className="text-right">Billed hours</th><th className="text-right">Clocked</th><th className="text-right">Efficiency</th><th className="text-right">Revenue</th><th className="w-1/4">Share</th></tr></thead>
             <tbody>
               {techRows.map((t) => (
                 <tr key={t.id}>
                   <td><Link href={`/technicians/${t.id}`} className="font-medium hover:text-accent">{t.name}</Link><div className="text-xs text-muted">{t.specialty}</div></td>
                   <td className="text-right tabular-nums">{t.jobs}</td>
                   <td className="text-right tabular-nums">{t.hrs.toFixed(1)}</td>
+                  <td className="text-right tabular-nums text-muted">{t.clocked.toFixed(1)}</td>
+                  <td className={`text-right tabular-nums ${t.efficiency == null ? "text-muted" : t.efficiency >= 1 ? "text-emerald-400" : t.efficiency < 0.7 ? "text-amber-400" : ""}`}>{t.efficiency == null ? "—" : `${Math.round(t.efficiency * 100)}%`}</td>
                   <td className="text-right tabular-nums font-medium">{money(t.rev)}</td>
                   <td><Progress value={t.rev / topRev} /></td>
                 </tr>

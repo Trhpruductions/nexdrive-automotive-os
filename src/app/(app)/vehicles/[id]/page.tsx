@@ -4,6 +4,8 @@ import { Bell, Calendar, Check, ClipboardCheck, Pencil, Plus, Trash2, Undo2 } fr
 import { requireStaff, can, MANAGER_ROLES } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
+import { deferredWork } from "@/lib/deferred";
+import { DeferredWorkList } from "@/components/app/deferred-work";
 import { Badge, Card, Flash, PageHeader, Stat } from "@/components/ui";
 import { ConfirmButton } from "@/components/app/confirm-button";
 import { PhotoGrid } from "@/components/app/photo-grid";
@@ -38,6 +40,7 @@ export default async function VehiclePage({ params, searchParams }: { params: Pr
 
   const spent = v.workOrders.filter((w) => w.invoice).reduce((s, w) => s + Number(w.invoice!.amountPaid), 0);
   const open = v.workOrders.find((w) => !["INVOICED", "CANCELLED"].includes(w.status));
+  const deferred = await deferredWork(v.id, open?.id);
 
   return (
     <div>
@@ -75,6 +78,10 @@ export default async function VehiclePage({ params, searchParams }: { params: Pr
               <Stat label="Total spent" value={money(spent)} />
             </div>
             {v.notes ? <p className="text-sm text-muted whitespace-pre-line border-t border-border pt-3 mt-4">{v.notes}</p> : null}
+          </Card>
+
+          <Card title="Deferred & recommended work" action={deferred.length ? <span className="text-xs text-amber-400">{deferred.length} item{deferred.length === 1 ? "" : "s"}</span> : null}>
+            <DeferredWorkList items={deferred} vehicleId={v.id} targetWorkOrderId={open?.id} returnTo={`/vehicles/${v.id}?ok=Added+to+${open ? encodeURIComponent(`WO-${String(open.number).padStart(5, "0")}`) : ""}`} />
           </Card>
 
           <Card title="Upcoming maintenance">

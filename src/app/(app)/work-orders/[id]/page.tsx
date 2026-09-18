@@ -10,6 +10,8 @@ import { PhotoGrid } from "@/components/app/photo-grid";
 import { LinesEditor } from "./lines";
 import { createInvoice, deleteWorkOrder, sendForApproval, setWorkOrderStatus, updateWorkOrderDetails } from "@/actions/workorders";
 import { startInspection } from "@/actions/inspections";
+import { deferredWork } from "@/lib/deferred";
+import { DeferredWorkList } from "@/components/app/deferred-work";
 import { INSPECTION_RESULT, WO_STATUS } from "@/lib/constants";
 import { fmtDateTime, fmtRelative, invNumber, num, toLocalInput, vehicleName, woNumber } from "@/lib/format";
 import { differenceInMinutes } from "date-fns";
@@ -77,6 +79,9 @@ export default async function WorkOrderPage({ params, searchParams }: { params: 
   const hoursLogged = wo.timeEntries.reduce((sum, e) => sum + differenceInMinutes(e.endedAt ?? new Date(), e.startedAt), 0) / 60;
   const inspCounts = { GOOD: 0, ATTENTION: 0, URGENT: 0, NA: 0 };
   for (const it of wo.inspection?.items ?? []) inspCounts[it.result]++;
+  // work this vehicle still needs: declined lines from past jobs + findings from this job's inspection
+  const suggestions = locked ? [] : await deferredWork(wo.vehicleId, wo.id);
+  const ownFindings = locked ? [] : (wo.inspection?.items ?? []).filter((i) => (i.result === "URGENT" || i.result === "ATTENTION") && !wo.lines.some((l) => l.description.toLowerCase().includes(i.name.toLowerCase())));
 
   const action = (to: WorkOrderStatus, label: string, Icon: typeof Play, cls = "btn-secondary") => (
     <form key={to} action={setWorkOrderStatus.bind(null, wo.id, to)}>
@@ -219,6 +224,19 @@ export default async function WorkOrderPage({ params, searchParams }: { params: 
           <Card title={wo.status === "ESTIMATE" || wo.status === "AWAITING_APPROVAL" ? "Estimate" : "Parts & labor"} action={wo.technician ? <span className="flex items-center gap-2 text-xs text-muted"><Avatar name={wo.technician.name} color={wo.technician.color} size={20} /> {wo.technician.name}{wo.bay ? ` · ${wo.bay.name}` : ""}</span> : null}>
             <LinesEditor workOrderId={wo.id} lines={wo.lines} parts={parts} cannedServices={cannedServices} taxRate={settings.taxRate} laborRate={settings.laborRate} taxExempt={wo.customer.taxExempt} editable={!locked} />
           </Card>
+
+          {suggestions.length || ownFindings.length ? (
+            <Card title="Suggested for this estimate" action={<span className="text-xs text-muted">from the inspection and earlier visits</span>}>
+              <DeferredWorkList
+                items={[
+                  ...ownFindings.map((i) => ({ kind: "finding" as const, id: i.id, description: i.name, result: i.result as "URGENT" | "ATTENTION", notes: i.notes, when: wo.inspection!.createdAt, source: "this inspection", workOrderId: wo.id })),
+                  ...suggestions,
+                ]}
+                vehicleId={wo.vehicleId}
+                targetWorkOrderId={wo.id}
+              />
+            </Card>
+          ) : null}
 
           <Card
             title="Inspection"
