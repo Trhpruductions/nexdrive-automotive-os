@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { db, currentShopIdOrNull } from "./db";
+import { DEFAULT_VERTICAL, termsFor, type Terms } from "./verticals";
 import { ALL_MODULE_KEYS, type ModuleKey } from "./constants";
 
 export type ShopSettings = {
@@ -34,6 +35,9 @@ export type ShopSettings = {
   dailyDigest: boolean;
   digestHour: number;
   smsNumber: string | null;
+  vertical: string;
+  /** effective vocabulary for the serviced asset (business type + overrides) */
+  terms: Terms;
   /** the shop has entered its own Stripe keys (secrets never leave the server) */
   stripeConfigured: boolean;
 };
@@ -42,7 +46,7 @@ export type ShopSettings = {
 export const PLATFORM_DEFAULTS: ShopSettings = {
   id: "", shopId: "", name: "NexDrive Automotive OS", tagline: "Complete automotive business management software", phone: null, email: null, address: null, city: null, state: null, zip: null, website: null,
   taxRate: 0, laborRate: 0, shopFeeRate: 0, openTime: "08:00", closeTime: "18:00", invoiceFooter: null, logoUrl: null, accentColor: "#2f7cf6", currency: "USD", timezone: "America/New_York",
-  modules: [...ALL_MODULE_KEYS], approvalMessage: null, portalWelcome: null, templates: null, onlineBooking: false, bookingNotes: null, dailyDigest: false, digestHour: 18, smsNumber: null, stripeConfigured: false,
+  modules: [...ALL_MODULE_KEYS], approvalMessage: null, portalWelcome: null, templates: null, onlineBooking: false, bookingNotes: null, dailyDigest: false, digestHour: 18, smsNumber: null, vertical: DEFAULT_VERTICAL, terms: termsFor(DEFAULT_VERTICAL), stripeConfigured: false,
 };
 
 /** Shop settings, memoised per request *per shop* (the root layout may run with no shop context). */
@@ -59,6 +63,7 @@ const loadSettings = cache(async (shopId: string): Promise<ShopSettings> => {
   return {
     ...safe,
     stripeConfigured: Boolean(stripeSecretKey && stripeWebhookSecret),
+    terms: termsFor(row.vertical, (row.terms as Partial<Terms> | null) ?? null),
     templates: (row.templates as Record<string, { subject?: string; body?: string }> | null) ?? null,
     taxRate: Number(row.taxRate),
     laborRate: Number(row.laborRate),

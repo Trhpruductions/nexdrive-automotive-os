@@ -2,6 +2,8 @@
 
 Complete automotive business management software by **NexDrive Productions** — work orders, estimates with digital customer approval, invoicing & payments, digital multi-point inspections, scheduling with bays and technicians, parts & inventory, a customer portal, an AI assistant, and a live production-floor / inventory feed layer.
 
+**Not just cars.** Each shop picks a *business type* — automotive, motorcycle & powersports, marine, small engine & outdoor power, heavy equipment & fleet, HVAC & appliance, electronics & device repair, general repair, or manufacturing & production — at sign-up or under Settings → Business type. The type sets the vocabulary everywhere (Vehicle → Vessel / Unit / Device / Machine, VIN → Hull ID / Serial / IMEI, mileage → hours or nothing), which fields show on the asset form and booking page, the starting inspection checklist and service packages, and which modules are on. Any word can be overridden per shop; data is never changed. (`src/lib/verticals.ts`)
+
 Every shop that runs it tailors it under **Settings**: branding (name, logo, accent colour), business details, tax & labor rates, hours, bays, which modules appear, the inspection checklist, canned services, customer notification templates, staff roles and the machine / inventory feeds. The seeded shop is **Plex Roswell Automotive**.
 
 Design reference: `design/nexdrive-os-mockup.png` (the 8-panel mockup) and `design/nexdrive-logo-original.png`.

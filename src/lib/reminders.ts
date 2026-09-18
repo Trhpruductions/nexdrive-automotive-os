@@ -3,6 +3,7 @@ import { addDays } from "date-fns";
 import { rawDb, withShop } from "./db";
 import { queueNotification } from "./notify";
 import { publicBase, renderTemplate } from "./templates";
+import { getSettings } from "./settings";
 
 const LOOKAHEAD_DAYS = 14;
 const LOOKAHEAD_MILES = 500;
@@ -32,7 +33,8 @@ export async function sendDueReminders(onlyShopId?: string) {
         const byDate = r.dueAtDate ? r.dueAtDate <= addDays(new Date(), LOOKAHEAD_DAYS) : false;
         const byMiles = r.dueAtMileage != null ? r.vehicle.mileage >= r.dueAtMileage - LOOKAHEAD_MILES : false;
         if (!byDate && !byMiles) continue;
-        const when = r.dueAtDate ? r.dueAtDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : r.dueAtMileage != null ? `${r.dueAtMileage.toLocaleString()} mi` : "soon";
+        const { terms } = await getSettings();
+        const when = r.dueAtDate ? r.dueAtDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : r.dueAtMileage != null ? `${r.dueAtMileage.toLocaleString()} ${terms.odometerUnit || "mi"}` : "soon";
         const t = await renderTemplate("reminder_due", { customer: r.vehicle.customer.firstName, vehicle: `${r.vehicle.year} ${r.vehicle.make} ${r.vehicle.model}`, service: r.service, date: when, link: `${base}/book/${shop.slug}` });
         await queueNotification({ customerId: r.vehicle.customerId, ...t });
         await rawDb.maintenanceReminder.update({ where: { id: r.id }, data: { notifiedAt: new Date() } });

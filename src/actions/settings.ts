@@ -230,6 +230,40 @@ export async function savePayments(formData: FormData) {
   back("payments", row?.stripeSecretKey && row?.stripeWebhookSecret ? "Stripe connected — card payments are on in the portal" : "Saved. Add the other key to turn card payments on.");
 }
 
+// ───────── Business type ─────────
+export async function saveBusinessType(formData: FormData) {
+  await requireStaff(MANAGER_ROLES);
+  const { getVertical } = await import("@/lib/verticals");
+  const vertical = getVertical(String(formData.get("vertical") ?? ""));
+  const base = vertical.terms;
+  const overrides: Record<string, string | null> = {};
+  const text = (k: "asset" | "assets" | "serial" | "odometerUnit" | "make" | "model") => {
+    const v = String(formData.get(k) ?? "").trim();
+    if (v && v !== base[k]) overrides[k] = v;
+  };
+  text("asset"); text("assets"); text("serial"); text("odometerUnit"); text("make"); text("model");
+  for (const k of ["plate", "odometer"] as const) {
+    const v = String(formData.get(k) ?? "").trim();
+    if (v.toLowerCase() === "none") { if (base[k] !== null) overrides[k] = null; }
+    else if (v && v !== base[k]) overrides[k] = v;
+  }
+  const shopId = await currentShopId();
+  await db.shopSettings.update({ where: { shopId }, data: { vertical: vertical.key, terms: Object.keys(overrides).length ? overrides : {} } });
+  if (formData.has("resetDefaults")) {
+    await db.inspectionTemplateItem.deleteMany({});
+    await db.inspectionTemplateItem.createMany({ data: vertical.inspection.flatMap(([category, items], ci) => items.map((name, i) => ({ shopId, category, name, sortOrder: ci * 100 + i }))) });
+    // keep packages that are referenced by work-order lines; retire the rest, then add the type's set
+    const used = await db.workOrderLine.findMany({ where: { cannedServiceId: { not: null } }, select: { cannedServiceId: true }, distinct: ["cannedServiceId"] });
+    const keep = new Set(used.map((u) => u.cannedServiceId!));
+    const existing = await db.cannedService.findMany({ select: { id: true, name: true } });
+    for (const c of existing) if (!keep.has(c.id)) await db.cannedService.delete({ where: { id: c.id } });
+    else await db.cannedService.update({ where: { id: c.id }, data: { active: false } });
+    await db.cannedService.createMany({ data: vertical.cannedServices.map((c) => ({ ...c, shopId })) });
+  }
+  revalidateAll();
+  back("type", `Business type set to ${vertical.label}`);
+}
+
 // ───────── Users ─────────
 const UserSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),

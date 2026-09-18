@@ -6,12 +6,14 @@ import { Badge, Card, EmptyState, Flash, PageHeader } from "@/components/ui";
 import { ListFilters, Pagination } from "@/components/app/search-bar";
 import { WO_STATUS } from "@/lib/constants";
 import { fmtDate, num } from "@/lib/format";
+import { getSettings } from "@/lib/settings";
 
 export const metadata = { title: "Vehicles" };
 const PAGE = 25;
 
 export default async function VehiclesPage({ searchParams }: { searchParams: Promise<{ q?: string; page?: string; ok?: string; error?: string }> }) {
   await requireStaff();
+  const { terms } = await getSettings();
   const sp = await searchParams;
   const q = sp.q?.trim() ?? "";
   const page = Math.max(1, Number(sp.page) || 1);
@@ -41,14 +43,14 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <PageHeader title="Vehicles" subtitle={`${total} vehicle${total === 1 ? "" : "s"} on file`} actions={<><a href="/api/export/vehicles" className="btn btn-secondary" download><Download size={16} /> Export CSV</a><Link href="/vehicles/new" className="btn btn-primary"><Plus size={16} /> Add vehicle</Link></>} />
+      <PageHeader title={terms.assets} subtitle={`${total} on file`} actions={<><a href="/api/export/vehicles" className="btn btn-secondary" download><Download size={16} /> Export CSV</a><Link href="/vehicles/new" className="btn btn-primary"><Plus size={16} /> Add {terms.asset.toLowerCase()}</Link></>} />
       <Flash searchParams={sp} />
-      <ListFilters action="/vehicles" q={q} placeholder="Search make, model, year, plate, VIN, owner…" />
+      <ListFilters action="/vehicles" q={q} placeholder={`Search ${terms.make.toLowerCase()}, ${terms.model.toLowerCase()}, year, ${terms.serial}, owner…`} />
       <Card padded={false}>
         {vehicles.length ? (
           <div className="overflow-x-auto">
             <table className="table">
-              <thead><tr><th>Vehicle</th><th>Plate / VIN</th><th>Owner</th><th className="text-right">Mileage</th><th>Last service</th><th>Status</th></tr></thead>
+              <thead><tr><th>{terms.asset}</th><th>{[terms.plate, terms.serial].filter(Boolean).join(" / ")}</th><th>Owner</th>{terms.odometer ? <th className="text-right">{terms.odometer}</th> : null}<th>Last service</th><th>Status</th></tr></thead>
               <tbody>
                 {vehicles.map((v) => {
                   const last = v.workOrders[0];
@@ -60,7 +62,7 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
                       </td>
                       <td className="text-muted"><div>{v.licensePlate ?? "—"}{v.plateState ? <span className="text-faint"> {v.plateState}</span> : null}</div><div className="text-[11px] font-mono text-faint">{v.vin ?? ""}</div></td>
                       <td><Link href={`/customers/${v.customer.id}`} className="hover:text-accent">{v.customer.firstName} {v.customer.lastName}</Link></td>
-                      <td className="text-right tabular-nums">{num(v.mileage)}</td>
+                      {terms.odometer ? <td className="text-right tabular-nums">{num(v.mileage)}</td> : null}
                       <td className="text-muted text-xs">{last ? fmtDate(last.createdAt) : "—"}</td>
                       <td>{last && !["INVOICED", "CANCELLED"].includes(last.status) ? <Badge tone={WO_STATUS[last.status].tone}>{WO_STATUS[last.status].label}</Badge> : <span className="text-xs text-faint">—</span>}</td>
                     </tr>

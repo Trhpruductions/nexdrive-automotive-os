@@ -6,6 +6,7 @@ import { ALL_MODULE_KEYS } from "./constants";
 import type { ShopPlan } from "@/generated/prisma/enums";
 
 import { DEFAULT_CANNED_SERVICES, DEFAULT_INSPECTION_TEMPLATE, slugify } from "./defaults";
+import { getVertical } from "./verticals";
 export { DEFAULT_CANNED_SERVICES, DEFAULT_INSPECTION_TEMPLATE, slugify };
 
 async function uniqueSlug(base: string) {
@@ -29,7 +30,10 @@ export async function provisionShop(opts: {
   slug?: string;
   /** add this shop as another location of the user who already has this email (no new login) */
   asAdditionalLocation?: boolean;
+  /** business type key from src/lib/verticals.ts (default automotive) */
+  vertical?: string;
 }) {
+  const vertical = getVertical(opts.vertical);
   const email = opts.ownerEmail.trim().toLowerCase();
   const existing = await rawDb.user.findUnique({ where: { email } });
   if (existing && !opts.asAdditionalLocation) throw new Error("That email already has a NexDrive login.");
@@ -44,10 +48,10 @@ export async function provisionShop(opts: {
       status: plan === "TRIAL" ? "TRIAL" : "ACTIVE",
       trialEndsAt: plan === "TRIAL" ? addDays(new Date(), opts.trialDays ?? 14) : null,
       ownerEmail: email,
-      settings: { create: { name: opts.name.trim(), tagline: "Automotive Service Center", phone: opts.phone ?? null, email, modules: [...ALL_MODULE_KEYS] } },
+      settings: { create: { name: opts.name.trim(), tagline: vertical.key === "automotive" ? "Automotive Service Center" : vertical.label, phone: opts.phone ?? null, email, vertical: vertical.key, modules: ALL_MODULE_KEYS.filter((m) => !vertical.modulesOff.includes(m)) } },
       bays: { create: [{ name: "Bay 1" }, { name: "Bay 2" }] },
-      templateItems: { create: DEFAULT_INSPECTION_TEMPLATE.flatMap(([category, items], ci) => items.map((name, i) => ({ category, name, sortOrder: ci * 100 + i }))) },
-      cannedServices: { create: DEFAULT_CANNED_SERVICES },
+      templateItems: { create: vertical.inspection.flatMap(([category, items], ci) => items.map((name, i) => ({ category, name, sortOrder: ci * 100 + i }))) },
+      cannedServices: { create: vertical.cannedServices },
     },
   });
   const user = existing

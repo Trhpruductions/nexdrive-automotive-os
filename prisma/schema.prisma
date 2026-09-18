@@ -667,6 +667,9 @@ model ShopSettings {
   portalWelcome   String?
   // Notification templates keyed by event (see src/lib/templates.ts); null = built-in defaults
   templates       Json?
+  // Business type (src/lib/verticals.ts) + optional custom vocabulary overrides
+  vertical        String   @default("automotive")
+  terms           Json?
   // Public online booking page (/book/{slug})
   onlineBooking   Boolean  @default(true)
   bookingNotes    String?

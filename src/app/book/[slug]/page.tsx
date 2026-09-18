@@ -47,7 +47,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
             </div>
           ) : (
             <div className="grid md:grid-cols-[1fr_260px] gap-6">
-              <BookingForm slug={slug} services={services} open={s.openTime} close={s.closeTime} />
+              <BookingForm slug={slug} services={services} open={s.openTime} close={s.closeTime} terms={s.terms} />
               <aside className="space-y-4">
                 <div className="card p-5 text-sm space-y-3">
                   <div className="flex items-start gap-2"><Clock size={16} className="text-accent mt-0.5 shrink-0" /><div><div className="font-medium">Hours</div><div className="text-muted">{fmtHour(s.openTime)} – {fmtHour(s.closeTime)}</div></div></div>

@@ -16,6 +16,7 @@ import { ApiTab } from "./api-tab";
 import { PaymentsTab } from "./payments-tab";
 import { ImportTab } from "./import-tab";
 import { ActivityTab } from "./activity-tab";
+import { BusinessTypeTab } from "./business-type-tab";
 import { CopyField } from "./copy-field";
 import { headers } from "next/headers";
 import { rawDb } from "@/lib/db";
@@ -24,6 +25,7 @@ export const metadata = { title: "Settings" };
 
 const TABS = [
   { key: "branding", label: "Branding" },
+  { key: "type", label: "Business type" },
   { key: "business", label: "Business" },
   { key: "rates", label: "Rates & hours" },
   { key: "bays", label: "Bays" },
@@ -86,6 +88,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </Card>
       ) : null}
 
+      {tab === "type" ? <BusinessTypeTab s={s} /> : null}
       {tab === "business" ? (
         <Card title="Business details">
           <form action={saveBusiness} className="grid sm:grid-cols-2 gap-4 max-w-3xl">

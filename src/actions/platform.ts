@@ -17,6 +17,7 @@ const SignupSchema = z.object({
   email: z.string().trim().toLowerCase().email("Enter a valid email"),
   phone: z.string().trim().max(40).optional(),
   password: z.string().min(8, "Password must be at least 8 characters"),
+  vertical: z.string().optional(),
 });
 
 /** Public sign-up: creates the shop + owner login and signs them in (14-day trial). */
@@ -26,7 +27,7 @@ export async function signup(_prev: SignupState, formData: FormData): Promise<Si
   const d = parsed.data;
   let user;
   try {
-    ({ user } = await provisionShop({ name: d.shopName, ownerName: d.ownerName, ownerEmail: d.email, password: d.password, phone: d.phone || null }));
+    ({ user } = await provisionShop({ name: d.shopName, ownerName: d.ownerName, ownerEmail: d.email, password: d.password, phone: d.phone || null, vertical: d.vertical }));
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not create the shop" };
   }

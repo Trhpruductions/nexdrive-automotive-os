@@ -5,8 +5,9 @@ import { CalendarCheck } from "lucide-react";
 import { addDays, format } from "date-fns";
 import { bookOnline, type BookingState } from "@/actions/booking";
 import { Field } from "@/components/ui";
+import type { Terms } from "@/lib/verticals";
 
-export function BookingForm({ slug, services, open, close }: { slug: string; services: { name: string; description: string | null }[]; open: string; close: string }) {
+export function BookingForm({ slug, services, open, close, terms }: { slug: string; services: { name: string; description: string | null }[]; open: string; close: string; terms: Terms }) {
   const [state, action, pending] = useActionState<BookingState, FormData>(bookOnline.bind(null, slug), undefined);
   const [service, setService] = useState(services[0]?.name ?? "__other");
   const today = format(new Date(), "yyyy-MM-dd");
@@ -38,11 +39,11 @@ export function BookingForm({ slug, services, open, close }: { slug: string; ser
       </div>
       <div className="grid grid-cols-[90px_1fr_1fr] gap-3">
         <Field label="Year"><input name="year" type="number" min={1900} max={new Date().getFullYear() + 1} required className="input" placeholder="2020" /></Field>
-        <Field label="Make"><input name="make" required className="input" placeholder="Ford" /></Field>
-        <Field label="Model"><input name="model" required className="input" placeholder="F-150" /></Field>
+        <Field label={terms.make}><input name="make" required className="input" /></Field>
+        <Field label={terms.model}><input name="model" required className="input" /></Field>
       </div>
       <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="License plate (optional)"><input name="licensePlate" className="input uppercase" maxLength={16} /></Field>
+        {terms.plate ? <Field label={`${terms.plate} (optional)`}><input name="licensePlate" className="input uppercase" maxLength={16} /></Field> : <Field label={`${terms.serial} (optional)`}><input name="licensePlate" className="input uppercase" maxLength={16} /></Field>}
         <Field label="Service">
           <select name="service" value={service} onChange={(e) => setService(e.target.value)} className="select">
             {services.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
@@ -60,7 +61,7 @@ export function BookingForm({ slug, services, open, close }: { slug: string; ser
         </Field>
       </div>
       <Field label="Anything we should know? (optional)"><textarea name="notes" rows={3} className="textarea" /></Field>
-      <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="dropOff" defaultChecked className="checkbox" /> I&apos;ll drop the vehicle off</label>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="dropOff" defaultChecked className="checkbox" /> {terms.dropOff}</label>
       {state?.error ? <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{state.error}</p> : null}
       <button className="btn btn-primary w-full py-3" disabled={pending}><CalendarCheck size={16} /> {pending ? "Booking…" : "Request appointment"}</button>
     </form>

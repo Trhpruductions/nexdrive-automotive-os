@@ -82,7 +82,7 @@ export function InvoiceSheet({
           <div className="text-muted">{[customer.phone, customer.email].filter(Boolean).join(" · ")}</div>
         </div>
         <div>
-          <div className="card-title mb-1.5">Vehicle</div>
+          <div className="card-title mb-1.5">{settings.terms.asset}</div>
           <div className="font-medium">{vehicleName(vehicle)}</div>
           <div className="text-muted">{[vehicle.color, vehicle.licensePlate].filter(Boolean).join(" · ")}</div>
           {vehicle.vin ? <div className="text-muted font-mono text-xs">VIN {vehicle.vin}</div> : null}

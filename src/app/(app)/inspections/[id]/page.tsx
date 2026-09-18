@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, CheckCheck, Plus, Printer, Save, Trash2 } from "lucide-react";
 import { requireStaff, can, BILLING_ROLES } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getSettings } from "@/lib/settings";
 import { Card, Flash, PageHeader } from "@/components/ui";
 import { ConfirmButton } from "@/components/app/confirm-button";
 import { PhotoGrid } from "@/components/app/photo-grid";
@@ -21,6 +22,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function InspectionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ cat?: string; ok?: string; error?: string }> }) {
   const user = await requireStaff();
+  const settings = await getSettings();
   const { id } = await params;
   const sp = await searchParams;
   const [insp, technicians] = await Promise.all([
@@ -123,7 +125,7 @@ export default async function InspectionPage({ params, searchParams }: { params:
 
         <div className="space-y-4">
           <Card title="Overview">
-            <CarDiagram items={insp.items} />
+            {settings.terms.diagram === "car" ? <CarDiagram items={insp.items} /> : null}
             <div className="grid grid-cols-2 gap-2 mt-4 text-sm">
               {RESULTS.map((k) => (
                 <div key={k} className="flex items-center gap-2 rounded-lg bg-bg-elevated px-3 py-2">

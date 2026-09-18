@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { VERTICALS } from "@/lib/verticals";
 import { ArrowRight, Bot, Calendar, Check, ClipboardCheck, ClipboardList, FileText, Package, Radio, Receipt, Settings2, Users, Webhook } from "lucide-react";
 
 export const metadata = {
@@ -117,6 +118,22 @@ export default function HomePage() {
             ))}
           </div>
         </div>
+      </section>
+
+      {/* Business types */}
+      <section id="business-types" className="max-w-6xl mx-auto px-4 sm:px-6 py-20">
+        <p className="text-[11px] tracking-[0.35em] text-accent font-semibold">NOT JUST CARS</p>
+        <h2 className="mt-3 text-3xl font-semibold tracking-tight">Built for automotive. Ready for whatever rolls, floats or plugs in.</h2>
+        <p className="mt-3 text-muted max-w-2xl">Pick your business type at sign-up and NexDrive speaks your language — Vessel and hull ID for a marina, Serial / IMEI for a device shop, run hours for a production floor — with a matching inspection checklist and service packages. Change it any time in Settings.</p>
+        <ul className="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {VERTICALS.map((v) => (
+            <li key={v.key} className="card p-4">
+              <div className="font-semibold">{v.label}</div>
+              <div className="text-sm text-muted mt-1">{v.blurb}</div>
+              <div className="text-[11px] text-faint mt-2">{v.terms.assets} · {v.terms.serial}{v.terms.odometer ? ` · ${v.terms.odometer}` : ""}</div>
+            </li>
+          ))}
+        </ul>
       </section>
 
       {/* Integrations */}

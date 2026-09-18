@@ -51,7 +51,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {/* KPI row */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
         <KpiCard label="Appointments" value={d.kpis.appointmentsToday} hint="Today" icon={Calendar} href="/schedule" />
-        <KpiCard label="Vehicles in Shop" value={d.kpis.inShop} hint="In progress" icon={Car} href="/work-orders?status=active" />
+        <KpiCard label={settings.terms.inShop} value={d.kpis.inShop} hint="In progress" icon={Car} href="/work-orders?status=active" />
         <KpiCard label="Open Work Orders" value={d.kpis.openWorkOrders} hint="Open" icon={ClipboardList} href="/work-orders" />
         <KpiCard label="Awaiting Approval" value={d.kpis.awaitingApproval} hint="Waiting" icon={Clock} tone="amber" href="/estimates" />
         <div className="col-span-2 md:col-span-1">

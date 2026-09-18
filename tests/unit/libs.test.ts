@@ -111,3 +111,28 @@ describe("twilio", () => {
     expect(phoneTail("575.555.0101")).toBe("5755550101");
   });
 });
+
+describe("business types", () => {
+  it("every type has a complete vocabulary, checklist and services", async () => {
+    const { VERTICALS, termsFor } = await import("@/lib/verticals");
+    expect(VERTICALS.length).toBeGreaterThanOrEqual(8);
+    for (const v of VERTICALS) {
+      expect(v.terms.asset).toBeTruthy();
+      expect(v.terms.assets).toBeTruthy();
+      expect(v.terms.serial).toBeTruthy();
+      expect(v.inspection.length).toBeGreaterThan(0);
+      expect(v.cannedServices.length).toBeGreaterThan(0);
+    }
+    expect(termsFor("nope").asset).toBe("Vehicle"); // unknown → automotive
+    expect(termsFor("marine").serial).toContain("Hull");
+    expect(termsFor("electronics").odometer).toBeNull();
+  });
+
+  it("applies custom word overrides without touching the rest", async () => {
+    const { termsFor } = await import("@/lib/verticals");
+    const t = termsFor("automotive", { asset: "Rig", assets: "Rigs", plate: null });
+    expect(t.asset).toBe("Rig");
+    expect(t.plate).toBeNull();
+    expect(t.serial).toBe("VIN");
+  });
+});

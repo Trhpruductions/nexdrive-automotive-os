@@ -32,7 +32,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-semibold">Hi {c.firstName}</h1>
-        <p className="text-sm text-muted mt-1">{s.portalWelcome ?? "Track your vehicles, approve estimates and view your service history."}</p>
+        <p className="text-sm text-muted mt-1">{s.portalWelcome ?? `Track your ${s.terms.assets.toLowerCase()}, approve estimates and view your service history.`}</p>
       </div>
       <Flash searchParams={sp} />
 
@@ -66,7 +66,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
       ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2" title="My vehicles">
+        <Card className="lg:col-span-2" title={`My ${s.terms.assets.toLowerCase()}`}>
           <ul className="grid sm:grid-cols-2 gap-3">
             {c.vehicles.map((v) => {
               const overdue = v.reminders.filter((r) => (r.dueAtDate && r.dueAtDate < new Date()) || (r.dueAtMileage && r.dueAtMileage <= v.mileage));

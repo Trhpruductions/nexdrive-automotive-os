@@ -4,11 +4,12 @@ import { db } from "@/lib/db";
 import { PageHeader } from "@/components/ui";
 import { vehicleName } from "@/lib/format";
 import { VehicleForm } from "../../vehicle-form";
+import { getSettings } from "@/lib/settings";
 
-export const metadata = { title: "Edit vehicle" };
 
 export default async function EditVehiclePage({ params }: { params: Promise<{ id: string }> }) {
   await requireStaff();
+  const { terms } = await getSettings();
   const { id } = await params;
   const [v, customers] = await Promise.all([
     db.vehicle.findUnique({ where: { id } }),
@@ -17,8 +18,8 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
   if (!v) notFound();
   return (
     <div>
-      <PageHeader title={`Edit ${vehicleName(v)}`} crumbs={[{ label: "Vehicles", href: "/vehicles" }, { label: vehicleName(v), href: `/vehicles/${id}` }, { label: "Edit" }]} />
-      <VehicleForm values={v} customers={customers} cancelHref={`/vehicles/${id}`} />
+      <PageHeader title={`Edit ${vehicleName(v)}`} crumbs={[{ label: terms.assets, href: "/vehicles" }, { label: vehicleName(v), href: `/vehicles/${id}` }, { label: "Edit" }]} />
+      <VehicleForm values={v} customers={customers} cancelHref={`/vehicles/${id}`} terms={terms} />
     </div>
   );
 }

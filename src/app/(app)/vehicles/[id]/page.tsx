@@ -41,13 +41,14 @@ export default async function VehiclePage({ params, searchParams }: { params: Pr
   const spent = v.workOrders.filter((w) => w.invoice).reduce((s, w) => s + Number(w.invoice!.amountPaid), 0);
   const open = v.workOrders.find((w) => !["INVOICED", "CANCELLED"].includes(w.status));
   const deferred = await deferredWork(v.id, open?.id);
+  const { terms } = settings;
 
   return (
     <div>
       <PageHeader
         title={vehicleName(v)}
         subtitle={<>{[v.color, v.licensePlate ? `${v.licensePlate}${v.plateState ? ` (${v.plateState})` : ""}` : null].filter(Boolean).join(" · ")} · Owner: <Link href={`/customers/${v.customer.id}`} className="text-accent hover:underline">{v.customer.firstName} {v.customer.lastName}</Link></>}
-        crumbs={[{ label: "Vehicles", href: "/vehicles" }, { label: vehicleName(v) }]}
+        crumbs={[{ label: terms.assets, href: "/vehicles" }, { label: vehicleName(v) }]}
         actions={
           <>
             <Link href={`/schedule/new?vehicleId=${v.id}`} className="btn btn-secondary"><Calendar size={16} /> Book</Link>
@@ -66,12 +67,12 @@ export default async function VehiclePage({ params, searchParams }: { params: Pr
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className="space-y-4">
-          <Card title="Vehicle details">
+          <Card title={`${terms.asset} details`}>
             <div className="grid grid-cols-2 gap-4">
-              <Stat label="VIN" value={<span className="font-mono text-xs break-all">{v.vin ?? "—"}</span>} />
-              <Stat label="Mileage" value={`${num(v.mileage)} mi`} />
-              <Stat label="Engine" value={v.engine ?? "—"} />
-              <Stat label="Transmission" value={v.transmission ?? "—"} />
+              <Stat label={terms.serial} value={<span className="font-mono text-xs break-all">{v.vin ?? "—"}</span>} />
+              {terms.odometer ? <Stat label={terms.odometer} value={`${num(v.mileage)} ${terms.odometerUnit}`} /> : null}
+              {terms.engine ? <Stat label={terms.engine} value={v.engine ?? "—"} /> : null}
+              {terms.transmission ? <Stat label={terms.transmission} value={v.transmission ?? "—"} /> : null}
               <Stat label="Trim" value={v.trim ?? "—"} />
               <Stat label="Color" value={v.color ?? "—"} />
               <Stat label="Visits" value={v.workOrders.length} />
@@ -118,7 +119,7 @@ export default async function VehiclePage({ params, searchParams }: { params: Pr
 
           {can(user, MANAGER_ROLES) ? (
             <form action={deleteVehicle.bind(null, v.id)} className="text-right">
-              <ConfirmButton message="Delete this vehicle?"><Trash2 size={14} /> Delete vehicle</ConfirmButton>
+              <ConfirmButton message={`Delete this ${terms.asset.toLowerCase()}?`}><Trash2 size={14} /> Delete {terms.asset.toLowerCase()}</ConfirmButton>
             </form>
           ) : null}
         </div>

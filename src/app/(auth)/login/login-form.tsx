@@ -11,7 +11,7 @@ export function LoginForm({ next, portal, reset }: { next?: string; portal: bool
   return (
     <form action={action} className="card p-6 space-y-4">
       <div>
-        <h3 className="font-semibold">{portal ? "Sign in to view your vehicles" : "Sign in to your shop"}</h3>
+        <h3 className="font-semibold">{portal ? "Sign in to your customer portal" : "Sign in to your shop"}</h3>
         <p className="text-sm text-muted mt-1">
           {portal ? "Use the email your shop has on file." : "Staff accounts are managed in Settings → Users."}
         </p>

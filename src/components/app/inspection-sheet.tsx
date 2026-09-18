@@ -47,16 +47,16 @@ export function InspectionSheet({
           </div>
         </div>
         <div className="sm:text-right">
-          <div className="text-[11px] tracking-[0.2em] text-accent font-bold">VEHICLE INSPECTION REPORT</div>
+          <div className="text-[11px] tracking-[0.2em] text-accent font-bold">{settings.terms.asset.toUpperCase()} INSPECTION REPORT</div>
           <div className="text-xl font-semibold">{woNumber(workOrderNumber)}</div>
           <div className="text-xs text-muted">{fmtDateTime(inspection.updatedAt)}{technician ? ` · ${technician}` : ""}</div>
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-[1fr_200px] gap-6 mt-8">
+      <div className={`grid gap-6 mt-8 ${settings.terms.diagram === "car" ? "sm:grid-cols-[1fr_200px]" : ""}`}>
         <div>
           <div className="grid grid-cols-2 gap-4">
-            <div><div className="card-title mb-1">Vehicle</div><div className="font-medium">{vehicleName(vehicle)}</div><div className="text-muted">{[vehicle.licensePlate, vehicle.vin ? `VIN ${vehicle.vin}` : null, `${num(vehicle.mileage)} mi`].filter(Boolean).join(" · ")}</div></div>
+            <div><div className="card-title mb-1">{settings.terms.asset}</div><div className="font-medium">{vehicleName(vehicle)}</div><div className="text-muted">{[vehicle.licensePlate, vehicle.vin ? `${settings.terms.serial} ${vehicle.vin}` : null, settings.terms.odometer ? `${num(vehicle.mileage)} ${settings.terms.odometerUnit}` : null].filter(Boolean).join(" · ")}</div></div>
             <div><div className="card-title mb-1">Customer</div><div className="font-medium">{customer.firstName} {customer.lastName}</div></div>
           </div>
           <div className="grid grid-cols-4 gap-2 mt-5">
@@ -76,7 +76,7 @@ export function InspectionSheet({
           )}
           {inspection.summary ? <div className="mt-5"><div className="card-title mb-1">Technician summary</div><p className="text-muted">{inspection.summary}</p></div> : null}
         </div>
-        <div><CarDiagram items={inspection.items} /></div>
+        {settings.terms.diagram === "car" ? <div><CarDiagram items={inspection.items} /></div> : null}
       </div>
 
       <div className="mt-8 grid sm:grid-cols-2 gap-x-8 gap-y-5">

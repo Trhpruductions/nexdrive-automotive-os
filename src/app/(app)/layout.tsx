@@ -15,7 +15,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const user = await requireStaff();
   const settings = await getSettings();
   const unread = await db.message.count({ where: { direction: "INBOUND", readAt: null } });
-  const nav = buildNav(settings.modules, user.role === "SUPERADMIN" ? "OWNER" : user.role);
+  const nav = buildNav(settings.modules, user.role === "SUPERADMIN" ? "OWNER" : user.role, { vehicles: settings.terms.assets });
   const shop = user.activeShopId ? await rawDb.shop.findUnique({ where: { id: user.activeShopId }, select: { status: true, trialEndsAt: true } }) : null;
   const trialDays = shop?.status === "TRIAL" && shop.trialEndsAt ? differenceInCalendarDays(shop.trialEndsAt, new Date()) : null;
   const canBill = user.role === "OWNER" || user.role === "SUPERADMIN";

@@ -7,6 +7,7 @@ import { createVehicle, updateVehicle } from "@/actions/vehicles";
 import type { FormState } from "@/actions/customers";
 import { Field } from "@/components/ui";
 import { US_STATES } from "@/lib/constants";
+import type { Terms } from "@/lib/verticals";
 
 type Values = {
   id?: string;
@@ -25,16 +26,23 @@ type Values = {
   notes?: string | null;
 };
 
+/**
+ * Add / edit the serviced asset. Field labels and which fields show come from
+ * the shop's business type (Settings → Business): a boat shop sees Hull ID and
+ * engine hours, a device shop sees Serial / IMEI and no odometer.
+ */
 export function VehicleForm({
   values = {},
   customers,
   returnTo,
   cancelHref,
+  terms,
 }: {
   values?: Values;
   customers: { id: string; firstName: string; lastName: string; company: string | null }[];
   returnTo?: string;
   cancelHref: string;
+  terms: Terms;
 }) {
   const action = values.id ? updateVehicle.bind(null, values.id) : createVehicle;
   const [state, formAction, pending] = useActionState<FormState, FormData>(action, undefined);
@@ -84,34 +92,38 @@ export function VehicleForm({
         </Field>
         <div className="grid grid-cols-3 gap-3 sm:col-span-2">
           <Field label="Year"><input name="year" type="number" min={1900} max={year} required defaultValue={values.year ?? ""} className="input" /></Field>
-          <Field label="Make"><input name="make" required defaultValue={values.make ?? ""} className="input" placeholder="Ford" /></Field>
-          <Field label="Model"><input name="model" required defaultValue={values.model ?? ""} className="input" placeholder="F-150" /></Field>
+          <Field label={terms.make}><input name="make" required defaultValue={values.make ?? ""} className="input" /></Field>
+          <Field label={terms.model}><input name="model" required defaultValue={values.model ?? ""} className="input" /></Field>
         </div>
-        <Field label="Trim"><input name="trim" defaultValue={values.trim ?? ""} className="input" placeholder="Lariat" /></Field>
+        <Field label="Trim / variant"><input name="trim" defaultValue={values.trim ?? ""} className="input" /></Field>
         <Field label="Color"><input name="color" defaultValue={values.color ?? ""} className="input" /></Field>
-        <Field label="VIN" hint={decodeMsg ?? "17 characters — decode fills year, make, model, trim, engine"}>
+        <Field label={terms.serial} hint={decodeMsg ?? terms.serialHint}>
           <div className="flex gap-2">
-            <input name="vin" maxLength={17} defaultValue={values.vin ?? ""} className="input font-mono uppercase" />
-            <button type="button" onClick={decodeVin} disabled={decoding} className="btn btn-secondary shrink-0"><ScanSearch size={15} /> {decoding ? "Decoding…" : "Decode"}</button>
+            <input name="vin" maxLength={terms.vinDecode ? 17 : 40} defaultValue={values.vin ?? ""} className="input font-mono uppercase" />
+            {terms.vinDecode ? <button type="button" onClick={decodeVin} disabled={decoding} className="btn btn-secondary shrink-0"><ScanSearch size={15} /> {decoding ? "Decoding…" : "Decode"}</button> : null}
           </div>
         </Field>
-        <div className="grid grid-cols-[1fr_90px] gap-3">
-          <Field label="License plate"><input name="licensePlate" defaultValue={values.licensePlate ?? ""} className="input uppercase" /></Field>
-          <Field label="State">
-            <select name="plateState" defaultValue={values.plateState ?? ""} className="select">
-              <option value="">—</option>
-              {US_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </Field>
-        </div>
-        <Field label="Mileage"><input name="mileage" type="number" min={0} defaultValue={values.mileage ?? 0} className="input" /></Field>
-        <Field label="Engine"><input name="engine" defaultValue={values.engine ?? ""} className="input" placeholder="5.0L V8" /></Field>
-        <Field label="Transmission"><input name="transmission" defaultValue={values.transmission ?? ""} className="input" placeholder="10-speed automatic" /></Field>
+        {terms.plate ? (
+          <div className={`grid gap-3 ${terms.vinDecode ? "grid-cols-[1fr_90px]" : "grid-cols-1"}`}>
+            <Field label={terms.plate}><input name="licensePlate" defaultValue={values.licensePlate ?? ""} className="input uppercase" /></Field>
+            {terms.vinDecode ? (
+              <Field label="State">
+                <select name="plateState" defaultValue={values.plateState ?? ""} className="select">
+                  <option value="">—</option>
+                  {US_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </Field>
+            ) : null}
+          </div>
+        ) : null}
+        {terms.odometer ? <Field label={`${terms.odometer}${terms.odometerUnit ? ` (${terms.odometerUnit})` : ""}`}><input name="mileage" type="number" min={0} defaultValue={values.mileage ?? 0} className="input" /></Field> : <input type="hidden" name="mileage" value={values.mileage ?? 0} />}
+        {terms.engine ? <Field label={terms.engine}><input name="engine" defaultValue={values.engine ?? ""} className="input" /></Field> : null}
+        {terms.transmission ? <Field label={terms.transmission}><input name="transmission" defaultValue={values.transmission ?? ""} className="input" /></Field> : null}
         <Field label="Notes" className="sm:col-span-2"><textarea name="notes" rows={3} defaultValue={values.notes ?? ""} className="textarea" placeholder="Known issues, aftermarket parts, customer requests" /></Field>
       </div>
       {state?.error ? <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{state.error}</p> : null}
       <div className="flex items-center gap-2 pt-1">
-        <button className="btn btn-primary" disabled={pending}><Save size={16} /> {pending ? "Saving…" : values.id ? "Save changes" : "Add vehicle"}</button>
+        <button className="btn btn-primary" disabled={pending}><Save size={16} /> {pending ? "Saving…" : values.id ? "Save changes" : `Add ${terms.asset.toLowerCase()}`}</button>
         <Link href={cancelHref} className="btn btn-ghost">Cancel</Link>
       </div>
     </form>
