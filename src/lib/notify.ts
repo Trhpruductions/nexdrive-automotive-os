@@ -2,6 +2,8 @@ import "server-only";
 import { subDays } from "date-fns";
 import { db, rawDb, withShop, currentShopId } from "./db";
 import { mailConfigured, sendEmail, sendSms, smsConfigured } from "./mail";
+import { getSettings, shopAddress } from "./settings";
+import { renderEmailHtml } from "./email-html";
 import type { NotificationChannel } from "@/generated/prisma/enums";
 
 /**
@@ -62,7 +64,13 @@ export async function flushOutbox(onlyShopId?: string) {
 }
 
 async function deliver(channel: NotificationChannel, customer: { email: string | null; phone: string | null } | null, opts: { subject: string; body: string }) {
-  if (channel === "EMAIL" && customer?.email) return sendEmail({ to: customer.email, subject: opts.subject, text: opts.body });
+  if (channel === "EMAIL" && customer?.email) {
+    const s = await getSettings();
+    const base = process.env.APP_URL?.replace(/\/$/, "");
+    const logoUrl = s.logoUrl && base ? (s.logoUrl.startsWith("http") ? s.logoUrl : `${base}${s.logoUrl}`) : null;
+    const html = renderEmailHtml({ shopName: s.name, logoUrl, accent: s.accentColor, address: shopAddress(s).join(", "), phone: s.phone, subject: opts.subject, body: opts.body, ctaLabel: /estimate/i.test(opts.subject) ? "Review estimate" : /invoice/i.test(opts.subject) ? "View invoice" : "Open" });
+    return sendEmail({ to: customer.email, subject: opts.subject, text: opts.body, html, from: process.env.EMAIL_FROM ? `${s.name} <${process.env.EMAIL_FROM.replace(/^.*<|>.*$/g, "")}>` : undefined });
+  }
   if (channel === "SMS" && customer?.phone) return sendSms(customer.phone, `${opts.subject}: ${opts.body}`);
   return false;
 }

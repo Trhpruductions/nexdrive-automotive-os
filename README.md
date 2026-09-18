@@ -99,6 +99,11 @@ Around that core:
 - **Text-to-pay** — every invoice has a public link (`/pay/{token}`, shown on the invoice as *Customer pay link* and inserted as `{link}` in the invoice message). The customer sees the invoice and, when the shop has Stripe set up, pays by card — no account needed.
 - **Installable** — NexDrive is a PWA: "Add to Home Screen" on iPad / Android / iPhone gives a full-screen app with the shop's icon. Baseline security headers (nosniff, frame-ancestors, referrer policy, HSTS in production) are set for every response.
 - **Outbox retry** — queued email/SMS are re-sent automatically every hour once a provider is configured (and on demand with *Retry queued* on the Notifications page).
+- **Appointment reminders** — the day before every scheduled/confirmed appointment the customer gets the `appointment_reminder` message (once, tracked per appointment).
+- **Service intervals** — give a canned service "repeat every 5,000 mi / 6 months" and invoicing it schedules the next maintenance reminder for that vehicle automatically (superseding the previous one), which the hourly reminder job then sends when due.
+- **Branded email** — every customer email goes out as HTML with the shop's logo, accent colour and a button for the link (approval, pay link, dashboard), with plain text alongside.
+- **Two-way SMS** — point the Twilio number's inbound webhook at `/api/twilio/inbound` (signature-checked) and customer texts land in Messages, matched by phone; unknown numbers get their own thread; STOP is noted on the customer.
+- **Owner's daily digest** — an end-of-day email (collected, invoiced, completed, estimates going stale, parts to reorder, tomorrow's schedule), on by default under Settings → Business.
 
 ## Production lines & inventory feeds
 

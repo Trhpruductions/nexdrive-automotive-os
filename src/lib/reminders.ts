@@ -49,6 +49,9 @@ export function startReminderScheduler() {
   if (timer) return;
   const run = async () => {
     await sendDueReminders().catch((e) => console.error("[nexdrive] reminder run failed", e));
+    const { sendAppointmentReminders, sendDailyDigests } = await import("./digest");
+    await sendAppointmentReminders().then((n) => n && console.log(`[nexdrive] ${n} appointment reminder(s) sent`)).catch((e) => console.error("[nexdrive] appointment reminders failed", e));
+    await sendDailyDigests().then((n) => n && console.log(`[nexdrive] ${n} daily digest(s) sent`)).catch((e) => console.error("[nexdrive] daily digest failed", e));
     const { flushOutbox } = await import("./notify");
     await flushOutbox().then((n) => n && console.log(`[nexdrive] outbox: ${n} queued notification(s) sent`)).catch((e) => console.error("[nexdrive] outbox flush failed", e));
     const { expireTrials } = await import("./billing");

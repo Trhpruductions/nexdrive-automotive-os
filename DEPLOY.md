@@ -65,7 +65,7 @@ Copy `.next/static` to `.next/standalone/.next/static` and `public` to `.next/st
 | `ANTHROPIC_API_KEY` | no | enables NexDrive AI |
 | `RESEND_API_KEY`, `EMAIL_FROM` | no | email delivery via Resend — notifications and password-reset links (otherwise emails stay queued and reset links are printed to the server log) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE` | no | email delivery via plain SMTP instead of Resend |
-| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | no | SMS delivery |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | no | SMS delivery; for replies set the number's inbound webhook to `$APP_URL/api/twilio/inbound` and enter the number under Settings → Business |
 | `NEXDRIVE_DISABLE_INTEGRATIONS` | no | `1` skips starting MQTT/pollers and the reminder scheduler (for one-off jobs) |
 
 | `STRIPE_PLATFORM_SECRET_KEY`, `STRIPE_PLATFORM_WEBHOOK_SECRET`, `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PRO` | no | NexDrive's own subscriptions (self-service `/billing`); webhook endpoint `/api/stripe/platform` |

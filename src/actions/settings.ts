@@ -59,6 +59,9 @@ export async function saveBusiness(formData: FormData) {
       currency: String(formData.get("currency") ?? "USD"),
       onlineBooking: formData.has("onlineBooking"),
       bookingNotes: opt(formData.get("bookingNotes")),
+      dailyDigest: formData.has("dailyDigest"),
+      digestHour: Math.min(23, Math.max(0, Number(formData.get("digestHour")) || 18)),
+      smsNumber: opt(formData.get("smsNumber")),
     },
   });
   revalidateAll();
@@ -152,7 +155,9 @@ export async function saveCannedService(formData: FormData) {
   const laborHours = Number(formData.get("laborHours"));
   if (!name || !(laborHours >= 0)) back("services", "Name and labor hours are required", true);
   const laborRateRaw = String(formData.get("laborRate") ?? "").trim();
-  const data = { name, description: opt(formData.get("description")), laborHours, laborRate: laborRateRaw ? Number(laborRateRaw) : null };
+  const intervalMiles = Number(formData.get("intervalMiles")) || null;
+  const intervalMonths = Number(formData.get("intervalMonths")) || null;
+  const data = { name, description: opt(formData.get("description")), laborHours, laborRate: laborRateRaw ? Number(laborRateRaw) : null, intervalMiles, intervalMonths };
   const svc = id ? await db.cannedService.update({ where: { id }, data }) : await db.cannedService.create({ data: { ...data, shopId: await currentShopId() } });
   // parts: rows of partId + qty
   const partIds = formData.getAll("partId").map(String);

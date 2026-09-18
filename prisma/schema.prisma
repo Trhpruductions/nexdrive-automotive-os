@@ -290,6 +290,7 @@ model Appointment {
   scheduledStart   DateTime
   scheduledEnd     DateTime
   status           AppointmentStatus @default(SCHEDULED)
+  reminderSentAt   DateTime?
   serviceRequested String
   notes            String?
   dropOff          Boolean           @default(true)
@@ -398,6 +399,8 @@ model WorkOrderLine {
   workOrderId String
   part        Part?     @relation(fields: [partId], references: [id], onDelete: SetNull)
   partId      String?
+  cannedService   CannedService? @relation(fields: [cannedServiceId], references: [id], onDelete: SetNull)
+  cannedServiceId String?
 
   @@index([workOrderId])
 }
@@ -649,6 +652,12 @@ model ShopSettings {
   // Card payments in the customer portal: the shop's own Stripe account
   stripeSecretKey     String?
   stripeWebhookSecret String?
+  // owner's end-of-day digest email
+  dailyDigest      Boolean  @default(true)
+  digestHour       Int      @default(18)
+  lastDigestAt     DateTime?
+  // the shop's own Twilio number (E.164) so inbound texts land in Messages
+  smsNumber        String?
 }
 
 // Shop-defined inspection checklist (used to build every new inspection)
@@ -673,6 +682,10 @@ model CannedService {
   laborHours  Decimal  @default(1) @db.Decimal(6, 2)
   laborRate   Decimal? @db.Decimal(10, 2)
   active      Boolean  @default(true)
+  // service interval: when invoiced, a maintenance reminder is created for the next one
+  intervalMiles  Int?
+  intervalMonths Int?
+  lines       WorkOrderLine[]
   createdAt   DateTime @default(now())
 
   parts CannedServicePart[]

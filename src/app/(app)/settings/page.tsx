@@ -107,6 +107,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <CopyField value={`${base}/book/${shopSlug}`} />
             </div>
             <Field label="Booking page notes" className="sm:col-span-2" hint="Shown beside the form — e.g. drop-off instructions, what to bring"><textarea name="bookingNotes" rows={2} defaultValue={s.bookingNotes ?? ""} className="textarea" /></Field>
+            <div className="sm:col-span-2 mt-2 pt-4 border-t border-border">
+              <div className="card-title mb-2">Messages &amp; digest</div>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="dailyDigest" defaultChecked={s.dailyDigest} className="accent-[var(--accent)]" /> Email the owner an end-of-day summary (collected, completed, tomorrow&apos;s schedule)</label>
+            </div>
+            <Field label="Send the digest after (hour, 0–23)"><input name="digestHour" type="number" min={0} max={23} defaultValue={s.digestHour} className="input" /></Field>
+            <Field label="Shop SMS number" hint="Your Twilio number in +1 format; customer replies land in Messages"><input name="smsNumber" defaultValue={s.smsNumber ?? ""} className="input" placeholder="+15755550142" /></Field>
             <div className="sm:col-span-2"><button className="btn btn-primary"><Save size={15} /> Save details</button></div>
           </form>
         </Card>
@@ -248,7 +254,7 @@ async function ServicesTab({ edit }: { edit?: string }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
       <Card className="lg:col-span-2" title={editing ? `Edit ${editing.name}` : "New canned service"}>
-        <CannedServiceEditor key={editing?.id ?? "new"} parts={parts.map((p) => ({ ...p, price: Number(p.price) }))} initial={editing ? { id: editing.id, name: editing.name, description: editing.description, laborHours: Number(editing.laborHours), laborRate: editing.laborRate ? Number(editing.laborRate) : null, parts: editing.parts.map((p) => ({ partId: p.partId, quantity: Number(p.quantity) })) } : undefined} />
+        <CannedServiceEditor key={editing?.id ?? "new"} parts={parts.map((p) => ({ ...p, price: Number(p.price) }))} initial={editing ? { id: editing.id, name: editing.name, description: editing.description, laborHours: Number(editing.laborHours), laborRate: editing.laborRate ? Number(editing.laborRate) : null, intervalMiles: editing.intervalMiles, intervalMonths: editing.intervalMonths, parts: editing.parts.map((p) => ({ partId: p.partId, quantity: Number(p.quantity) })) } : undefined} />
       </Card>
       <Card className="lg:col-span-3" title="Canned services" padded={false}>
         <table className="table">

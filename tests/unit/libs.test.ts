@@ -79,3 +79,35 @@ describe("rate limit", () => {
     expect(rateLimit("t:1", 3, 60)).toBe(0);
   });
 });
+
+describe("email html", () => {
+  it("escapes content and turns the first URL into a button", async () => {
+    const { renderEmailHtml } = await import("@/lib/email-html");
+    const html = renderEmailHtml({ shopName: "Plex <Roswell>", accent: "#ff0000", subject: "Invoice INV-00001", body: "Hi Ana,\n\nView it here: https://x.example/pay/abc — thanks", ctaLabel: "View invoice" });
+    expect(html).toContain("Plex &lt;Roswell&gt;");
+    expect(html).toContain('href="https://x.example/pay/abc"');
+    expect(html).toContain("View invoice");
+    expect(html).toContain("background:#ff0000");
+    expect(html).not.toContain("<Roswell>");
+  });
+
+  it("falls back to the default accent for a bad colour", async () => {
+    const { renderEmailHtml } = await import("@/lib/email-html");
+    expect(renderEmailHtml({ shopName: "S", accent: "red", subject: "x", body: "y" })).toContain("#2f7cf6");
+  });
+});
+
+describe("twilio", () => {
+  it("validates a signed webhook and normalises phone numbers", async () => {
+    const { createHmac } = await import("node:crypto");
+    const { phoneTail, validTwilioSignature } = await import("@/lib/twilio");
+    const url = "https://shop.example/api/twilio/inbound";
+    const params = { From: "+15755550101", Body: "Running late", To: "+15755550142" };
+    const sig = createHmac("sha1", "tok").update(url + "Body" + params.Body + "From" + params.From + "To" + params.To).digest("base64");
+    expect(validTwilioSignature(url, params, sig, "tok")).toBe(true);
+    expect(validTwilioSignature(url, { ...params, Body: "changed" }, sig, "tok")).toBe(false);
+    expect(validTwilioSignature(url, params, null, "tok")).toBe(false);
+    expect(phoneTail("+1 (575) 555-0101")).toBe("5755550101");
+    expect(phoneTail("575.555.0101")).toBe("5755550101");
+  });
+});

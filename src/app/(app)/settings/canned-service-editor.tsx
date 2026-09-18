@@ -7,7 +7,7 @@ import { saveCannedService } from "@/actions/settings";
 import { Field } from "@/components/ui";
 
 type Part = { id: string; name: string; sku: string; price: number };
-type Initial = { id: string; name: string; description: string | null; laborHours: number; laborRate: number | null; parts: { partId: string; quantity: number }[] };
+type Initial = { id: string; name: string; description: string | null; laborHours: number; laborRate: number | null; intervalMiles?: number | null; intervalMonths?: number | null; parts: { partId: string; quantity: number }[] };
 
 export function CannedServiceEditor({ parts, initial }: { parts: Part[]; initial?: Initial }) {
   const [rows, setRows] = useState<{ partId: string; quantity: number }[]>(initial?.parts ?? []);
@@ -19,6 +19,10 @@ export function CannedServiceEditor({ parts, initial }: { parts: Part[]; initial
       <div className="grid grid-cols-2 gap-3">
         <Field label="Labor hours"><input name="laborHours" type="number" step="0.05" min="0" required defaultValue={initial?.laborHours ?? 1} className="input" /></Field>
         <Field label="Labor rate override" hint="Blank = shop rate"><input name="laborRate" type="number" step="0.01" min="0" defaultValue={initial?.laborRate ?? ""} className="input" /></Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Repeat every (miles)" hint="Schedules the next reminder when invoiced"><input name="intervalMiles" type="number" step="500" min="0" defaultValue={initial?.intervalMiles ?? ""} className="input" placeholder="5000" /></Field>
+        <Field label="…or every (months)"><input name="intervalMonths" type="number" step="1" min="0" defaultValue={initial?.intervalMonths ?? ""} className="input" placeholder="6" /></Field>
       </div>
       <div>
         <span className="label">Parts included</span>

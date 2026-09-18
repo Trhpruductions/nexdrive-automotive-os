@@ -15,6 +15,7 @@ export const TEMPLATE_EVENTS = [
   { key: "invoice_ready", label: "Invoice ready", vars: ["customer", "invoice", "total", "link", "shop"] },
   { key: "payment_received", label: "Payment received", vars: ["customer", "amount", "invoice", "shop"] },
   { key: "reminder_due", label: "Maintenance reminder due", vars: ["customer", "vehicle", "service", "date", "shop", "phone"] },
+  { key: "appointment_reminder", label: "Appointment reminder (day before)", vars: ["customer", "vehicle", "date", "time", "service", "shop", "phone"] },
 ] as const;
 export type TemplateKey = (typeof TEMPLATE_EVENTS)[number]["key"];
 
@@ -27,6 +28,7 @@ export const DEFAULT_TEMPLATES: Record<TemplateKey, { subject: string; body: str
   invoice_ready: { subject: "Invoice {invoice}", body: "Hi {customer}, your invoice {invoice} for {total} is ready. View and pay here: {link} — {shop}" },
   payment_received: { subject: "Payment received — thank you", body: "Hi {customer}, we received your payment of {amount} for invoice {invoice}. Thank you! — {shop}" },
   reminder_due: { subject: "Service reminder: {service}", body: "Hi {customer}, your {vehicle} is due for {service} ({date}). Book online or call {phone} to schedule. — {shop}" },
+  appointment_reminder: { subject: "Reminder: your appointment {date}", body: "Hi {customer}, a reminder that your {vehicle} is booked for {service} on {date} at {time}. Reply or call {phone} if you need to change it. — {shop}" },
 };
 
 /** Public base URL for links in messages (APP_URL in production). */

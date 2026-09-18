@@ -159,7 +159,7 @@ export async function addCannedService(workOrderId: string, formData: FormData) 
   const count = await db.workOrderLine.count({ where: { workOrderId } });
   const rate = svc.laborRate ? Number(svc.laborRate) : settings.laborRate;
   await db.workOrderLine.create({
-    data: { workOrderId, kind: "LABOR", description: svc.name, hours: svc.laborHours, quantity: svc.laborHours, unitPrice: rate, taxable: false, sortOrder: count },
+    data: { workOrderId, kind: "LABOR", description: svc.name, hours: svc.laborHours, quantity: svc.laborHours, unitPrice: rate, taxable: false, sortOrder: count, cannedServiceId: svc.id },
   });
   let i = 1;
   for (const p of svc.parts) {
@@ -383,6 +383,15 @@ export async function createInvoice(workOrderId: string) {
     await tx.timeEntry.updateMany({ where: { workOrderId, endedAt: null }, data: { endedAt: new Date() } });
     return inv;
   });
+  // service intervals: schedule the next visit for every canned service on this job
+  const intervalLines = await db.workOrderLine.findMany({ where: { workOrderId, approved: true, cannedServiceId: { not: null } }, include: { cannedService: { select: { name: true, intervalMiles: true, intervalMonths: true } } } });
+  const mileage = wo.mileageOut ?? wo.mileageIn ?? 0;
+  for (const l of intervalLines) {
+    const svc = l.cannedService;
+    if (!svc || (!svc.intervalMiles && !svc.intervalMonths)) continue;
+    await db.maintenanceReminder.updateMany({ where: { vehicleId: wo.vehicleId, service: svc.name, completed: false }, data: { completed: true } });
+    await db.maintenanceReminder.create({ data: { vehicleId: wo.vehicleId, service: svc.name, dueAtMileage: svc.intervalMiles ? mileage + svc.intervalMiles : null, dueAtDate: svc.intervalMonths ? new Date(new Date().setMonth(new Date().getMonth() + svc.intervalMonths)) : null } });
+  }
   const tpl = await renderTemplate("invoice_ready", { customer: wo.customer.firstName, invoice: `INV-${String(invoice.number).padStart(5, "0")}`, total: t.total.toLocaleString("en-US", { style: "currency", currency: "USD" }), link: `${await publicBase()}/pay/${invoice.payToken}` });
   await queueNotification({ customerId: wo.customerId, workOrderId, ...tpl });
   await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "invoice", entity: "Invoice", entityId: invoice.id, detail: `WO-${wo.number}` } });
