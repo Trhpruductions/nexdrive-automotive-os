@@ -11,6 +11,8 @@ import { computeTotals } from "@/lib/money";
 import { fmtDay, greeting, money, vehicleName, woNumber } from "@/lib/format";
 import { format } from "date-fns";
 import { TechDashboard } from "./tech-dashboard";
+import { ProductionDashboard } from "./production-dashboard";
+import { OperatorDashboard } from "./operator-dashboard";
 import { OnboardingChecklist } from "@/components/app/onboarding";
 import { Flash } from "@/components/ui";
 
@@ -20,6 +22,24 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const user = await requireStaff();
   const settings = await getSettings();
   const sp = await searchParams;
+  const manufacturing = settings.modules.includes("jobs");
+  if (manufacturing && user.role === "TECHNICIAN") {
+    return (
+      <div>
+        <Flash searchParams={sp} />
+        <OperatorDashboard userName={user.name} />
+      </div>
+    );
+  }
+  if (manufacturing) {
+    return (
+      <div>
+        <Flash searchParams={sp} />
+        <OnboardingChecklist settings={settings} role={user.role} />
+        <ProductionDashboard settings={settings} userName={user.name} />
+      </div>
+    );
+  }
   if (user.role === "TECHNICIAN" && user.technicianId) {
     return (
       <div>

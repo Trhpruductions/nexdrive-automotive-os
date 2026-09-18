@@ -24,7 +24,7 @@ export async function startIntegrationRuntime() {
   state.started = true;
   await sync().catch((e) => console.error("[integrations] sync failed", e));
   state.timer = setInterval(() => sync().catch((e) => console.error("[integrations] sync failed", e)), 30_000);
-  state.sweep = setInterval(() => sweepOfflineMachines(5).catch(() => null), 60_000);
+  state.sweep = setInterval(() => sweepOfflineMachines(15).catch(() => null), 60_000);
   console.log("[integrations] runtime started");
 }
 

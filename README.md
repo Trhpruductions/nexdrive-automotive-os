@@ -163,6 +163,11 @@ Pick the **Metal stamping & press parts** business type and three modules appear
 - **Shipments**: pick a customer, ship pieces from complete jobs and finished-goods stock, print a **packing slip**, mark shipped (stock leaves), then **Create invoice** — a goods invoice with the same pay link and portal flow as service invoices.
 - **Shift & OEE report** (Production → Shift & OEE): per press per day — run time vs planned shift time, good/scrap, availability × performance × quality = OEE, output by shift, downtime reasons. Shifts are set under Settings → Rates & hours.
 
+- **Dashboards for the press shop**: owners see presses running / down, pieces and scrap today, OEE, late jobs, pieces ready to ship, open invoices, the live floor, jobs on the floor, dies due, low coil and this week's shipments. Operators (technician role) get a **press station**: every press with its job, big good/scrap/rate counters, Pause with a reason, Resume, manual counts, and the released queue with one-tap Start.
+- **Press plan** (Jobs → Press plan): every open job queued per press in priority order with hours from remaining pieces ÷ standard rate and a projected finish against the due date — late ones in red.
+- **B2B customer portal**: a manufacturing shop's customers sign in to see open orders with live progress, shipments with tracking, invoices with pay links, their part numbers and stock, and completed orders — instead of vehicles.
+- **Tooling work orders**: *Open tooling work order* on a die sends it to the tool room as a work order (parts, labor, history) on the die's own asset record; the die shows *maintenance* until it's done.
+
 The seed includes **Roswell Press & Stamping** (login `press@nexdrive.app`, feed key `nd_demo_roswellpress_feed_key`) with three presses, three dies, two B2B customers, coil stock, products and jobs.
 
 ### Machines ↔ maintenance

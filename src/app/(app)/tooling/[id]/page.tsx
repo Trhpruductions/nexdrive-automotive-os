@@ -5,7 +5,7 @@ import { requireStaff, can, MANAGER_ROLES } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Badge, Card, Flash, PageHeader, Progress, Stat } from "@/components/ui";
 import { ConfirmButton } from "@/components/app/confirm-button";
-import { deleteDie, serviceDie } from "@/actions/production";
+import { deleteDie, dieMaintenanceJob, serviceDie } from "@/actions/production";
 import { fmtDate, num } from "@/lib/format";
 import { jobNumber } from "@/lib/production";
 import { DieForm } from "../die-form";
@@ -45,7 +45,11 @@ export default async function DiePage({ params, searchParams }: { params: Promis
               <input name="note" className="input" placeholder="Sharpened punches, replaced pilot pins…" />
               <button className="btn btn-primary shrink-0"><Wrench size={14} /> Record service (resets counter)</button>
             </form>
-            <p className="text-xs text-faint mt-2">Hit counts come from press counts while a job using this die is running (or from manual counts on the job).</p>
+            <form action={dieMaintenanceJob.bind(null, d.id)} className="mt-3 flex flex-col sm:flex-row gap-2">
+              <input name="complaint" className="input" placeholder="Send to the tool room: sharpen, replace pilots, tryout…" />
+              <button className="btn btn-secondary shrink-0">Open tooling work order</button>
+            </form>
+            <p className="text-xs text-faint mt-2">Hit counts come from press counts while a job using this die is running (or from manual counts on the job). A tooling work order tracks the sharpening / rebuild with parts, labor and history.</p>
           </Card>
           <Card title="Recent runs" padded={false}>
             <table className="table">

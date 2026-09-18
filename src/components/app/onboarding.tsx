@@ -14,10 +14,23 @@ export async function OnboardingChecklist({ settings, role }: { settings: ShopSe
   const shopId = await currentShopId();
   const shop = await rawDb.shop.findUnique({ where: { id: shopId }, select: { createdAt: true, slug: true } });
   if (!shop || differenceInDays(new Date(), shop.createdAt) > 21) return null;
-  const [customers, workOrders, techs, staff, invoices] = await Promise.all([
+  const manufacturing = settings.modules.includes("jobs");
+  const [customers, workOrders, techs, staff, invoices, products, dies, jobs, presses] = await Promise.all([
     db.customer.count(), db.workOrder.count(), db.technician.count({ where: { active: true } }), db.user.count({ where: { role: { not: "CUSTOMER" } } }), db.invoice.count(),
+    manufacturing ? db.part.count({ where: { kind: "PRODUCT" } }) : 0, manufacturing ? db.die.count() : 0, manufacturing ? db.productionJob.count() : 0, manufacturing ? db.machine.count() : 0,
   ]);
-  const steps = [
+  const steps = manufacturing ? [
+    { done: Boolean(settings.phone && settings.address), label: "Confirm your business type and contact details", href: "/settings?tab=type" },
+    { done: Boolean(settings.logoUrl) || settings.accentColor.toLowerCase() !== "#2f7cf6", label: "Add your logo and colour", href: "/settings?tab=branding" },
+    { done: presses > 0, label: "Add your presses (or connect the PLC feed)", href: "/production?manage=1" },
+    { done: dies > 0, label: "Add your dies with service intervals", href: "/tooling/new" },
+    { done: customers > 0, label: "Add or import your customers", href: "/settings?tab=import" },
+    { done: products > 0, label: "Add the parts you make", href: "/parts/products/new" },
+    { done: techs > 0, label: "Add your operators", href: "/technicians/new" },
+    { done: staff > 1, label: "Invite the rest of your staff", href: "/settings?tab=users" },
+    { done: jobs > 0, label: "Create your first job", href: "/jobs/new" },
+    { done: invoices > 0, label: "Ship and invoice your first order", href: "/shipments" },
+  ] : [
     { done: settings.taxRate > 0 || settings.laborRate > 0, label: "Set your labor rate, sales tax and hours", href: "/settings?tab=rates" },
     { done: Boolean(settings.logoUrl) || settings.accentColor.toLowerCase() !== "#2f7cf6", label: "Add your logo and colour", href: "/settings?tab=branding" },
     { done: settings.vertical !== "automotive" || Boolean(settings.phone && settings.address), label: "Confirm your business type and contact details", href: "/settings?tab=type" },

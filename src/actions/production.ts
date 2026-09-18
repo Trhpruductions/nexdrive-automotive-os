@@ -55,6 +55,15 @@ export async function serviceDie(id: string, formData: FormData) {
   redirect(`/tooling/${id}?ok=Service+recorded`);
 }
 
+/** Tool room: open a work order (sharpen / rebuild) on the die's asset record. */
+export async function dieMaintenanceJob(id: string, formData: FormData) {
+  const user = await requireStaff();
+  const { openDieJob } = await import("@/lib/maintenance");
+  const { workOrder, created } = await openDieJob(id, { complaint: opt(formData.get("complaint"), 300) ?? "Sharpen / inspect die", by: user.name, userId: user.id });
+  revalidatePath(`/tooling/${id}`);
+  redirect(`/work-orders/${workOrder.id}?ok=${created ? "Tooling+job+opened" : "This+die+already+has+an+open+job"}`);
+}
+
 export async function deleteDie(id: string) {
   await requireStaff(MANAGER_ROLES);
   await db.die.delete({ where: { id } });
@@ -102,7 +111,7 @@ export async function startJob(id: string, formData: FormData) {
   await db.productionJob.update({ where: { id }, data: { status: "RUNNING", machineId, startedAt: job.startedAt ?? now } });
   if (job.dieId) await db.die.update({ where: { id: job.dieId }, data: { machineId } });
   await db.productionRun.create({ data: { jobId: id, machineId, dieId: job.dieId, technicianId: user.technicianId, operator: user.name, shift: shiftAt(shifts, now), startedAt: now } });
-  await db.machine.update({ where: { id: machineId }, data: { status: "RUNNING", lastStatusChangeAt: now } });
+  await db.machine.update({ where: { id: machineId }, data: { status: "RUNNING", lastStatusChangeAt: now, lastHeartbeatAt: now } });
   await db.machineEvent.create({ data: { machineId, type: "STATUS", status: "RUNNING", message: `${jobNumber(job.number)} started by ${user.name}` } });
   const { bus } = await import("@/lib/integrations/bus");
   bus.emit("change", { machines: [machineId], parts: [] });
@@ -119,7 +128,7 @@ export async function pauseJob(id: string, formData: FormData) {
   await db.productionRun.updateMany({ where: { jobId: id, endedAt: null }, data: { endedAt: now, downtimeReason: opt(formData.get("reason"), 200) ?? undefined, notes: opt(formData.get("notes"), 500) ?? undefined } });
   await db.productionJob.update({ where: { id }, data: { status: "PAUSED" } });
   if (job.machineId) {
-    await db.machine.updateMany({ where: { id: job.machineId, status: "RUNNING" }, data: { status: "IDLE", lastStatusChangeAt: now } });
+    await db.machine.updateMany({ where: { id: job.machineId, status: "RUNNING" }, data: { status: "IDLE", lastStatusChangeAt: now, lastHeartbeatAt: now } });
     await db.machineEvent.create({ data: { machineId: job.machineId, type: "STATUS", status: "IDLE", message: `${jobNumber(job.number)} paused by ${user.name}${formData.get("reason") ? ` — ${formData.get("reason")}` : ""}` } });
   }
   revalidatePath("/jobs");

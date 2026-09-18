@@ -192,10 +192,11 @@ async function applyOne(ev: CanonicalEvent, ctx: { integrationId?: string; sourc
 }
 
 /** Machines that haven't reported within `staleMinutes` are flipped to OFFLINE. */
-export async function sweepOfflineMachines(staleMinutes = 5) {
+export async function sweepOfflineMachines(staleMinutes = 15) {
   const cutoff = new Date(Date.now() - staleMinutes * 60_000);
-  // runs from a timer with no request — unscoped on purpose, across every shop
-  const stale = await rawDb.machine.findMany({ where: { active: true, status: { not: "OFFLINE" }, OR: [{ lastHeartbeatAt: { lt: cutoff } }, { lastHeartbeatAt: null }] } });
+  // runs from a timer with no request — unscoped on purpose, across every shop.
+  // Only machines that have a feed can be "offline"; manually run presses keep the status staff set.
+  const stale = await rawDb.machine.findMany({ where: { active: true, integrationId: { not: null }, status: { not: "OFFLINE" }, OR: [{ lastHeartbeatAt: { lt: cutoff } }, { lastHeartbeatAt: null }] } });
   for (const m of stale) {
     await rawDb.machine.update({ where: { id: m.id }, data: { status: "OFFLINE", lastStatusChangeAt: new Date() } });
     await rawDb.machineEvent.create({ data: { machineId: m.id, type: "STATUS", status: "OFFLINE", message: `No data for ${staleMinutes} min` } });

@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export function PortalNav({ unreadMessages, unreadNotifications }: { unreadMessages: number; unreadNotifications: number }) {
+export function PortalNav({ unreadMessages, unreadNotifications, booking = true }: { unreadMessages: number; unreadNotifications: number; booking?: boolean }) {
   const p = usePathname();
   const items = [
     { href: "/portal", label: "Overview" },
     { href: "/portal/messages", label: "Messages", badge: unreadMessages },
     { href: "/portal/notifications", label: "Updates", badge: unreadNotifications },
-    { href: "/portal/book", label: "Book service" },
+    ...(booking ? [{ href: "/portal/book", label: "Book service" }] : []),
   ];
   return (
     <nav className="hidden md:flex items-center gap-1 ml-6">

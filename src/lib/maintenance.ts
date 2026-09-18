@@ -57,3 +57,26 @@ export async function syncRunHours(machineId: string, metric: string, value: num
   const hours = Math.round(value);
   await db.vehicle.updateMany({ where: { id: m.assetId, mileage: { lt: hours } }, data: { mileage: hours } });
 }
+
+/** Dies get an asset record too, so sharpening / rebuilds are work orders with history. */
+export async function assetForDie(dieId: string) {
+  const d = await db.die.findUniqueOrThrow({ where: { id: dieId }, include: { asset: true } });
+  if (d.asset) return d.asset;
+  const owner = await houseCustomer();
+  const asset = await db.vehicle.create({ data: { shopId: await currentShopId(), customerId: owner.id, year: d.createdAt.getFullYear(), make: "Die", model: d.name, vin: d.code, licensePlate: d.location ?? null, mileage: d.hitCount, notes: `Asset record for die ${d.code}.` } });
+  await db.die.update({ where: { id: d.id }, data: { assetId: asset.id } });
+  return asset;
+}
+
+/** Open a tooling work order (sharpen / rebuild) for a die; one open job at a time. */
+export async function openDieJob(dieId: string, opts: { complaint: string; by?: string | null; userId?: string | null }) {
+  const asset = await assetForDie(dieId);
+  const die = await db.die.findUniqueOrThrow({ where: { id: dieId } });
+  await db.vehicle.updateMany({ where: { id: asset.id, mileage: { lt: die.hitCount } }, data: { mileage: die.hitCount } });
+  const open = await db.workOrder.findFirst({ where: { vehicleId: asset.id, status: { notIn: ["INVOICED", "CANCELLED", "COMPLETED"] } } });
+  if (open) return { workOrder: open, created: false };
+  const wo = await db.workOrder.create({ data: { shopId: await currentShopId(), number: await nextNumber("wo"), customerId: asset.customerId, vehicleId: asset.id, status: "APPROVED", approvedAt: new Date(), approvedBy: opts.by ?? "Tool room", complaint: opts.complaint, mileageIn: die.hitCount } });
+  await db.die.update({ where: { id: dieId }, data: { status: "MAINTENANCE" } });
+  await db.auditLog.create({ data: { shopId: await currentShopId(), userId: opts.userId ?? null, action: "create", entity: "WorkOrder", entityId: wo.id, detail: `#${wo.number} for die ${die.code}` } });
+  return { workOrder: wo, created: true };
+}

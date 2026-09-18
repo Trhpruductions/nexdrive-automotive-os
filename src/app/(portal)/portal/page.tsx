@@ -4,16 +4,29 @@ import { requireCustomer } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
 import { Badge, Card, Flash } from "@/components/ui";
+import { OrdersHome } from "./orders-home";
 import { INVOICE_STATUS, WO_STATUS } from "@/lib/constants";
 import { computeTotals } from "@/lib/money";
 import { fmtDate, fmtDateTime, invNumber, money, num, vehicleName, woNumber } from "@/lib/format";
 
-export const metadata = { title: "My vehicles" };
+export async function generateMetadata() {
+  const s = await getSettings();
+  return { title: s.modules.includes("jobs") ? "My orders" : `My ${s.terms.assets.toLowerCase()}` };
+}
 
 export default async function PortalHome({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string }> }) {
   const user = await requireCustomer();
   const s = await getSettings();
   const sp = await searchParams;
+  if (s.modules.includes("jobs")) {
+    const me = await db.customer.findUniqueOrThrow({ where: { id: user.customerId }, select: { firstName: true, company: true } });
+    return (
+      <div>
+        <Flash searchParams={sp} />
+        <OrdersHome customerId={user.customerId} firstName={me.firstName} company={me.company} />
+      </div>
+    );
+  }
   const c = await db.customer.findUniqueOrThrow({
     where: { id: user.customerId },
     include: {

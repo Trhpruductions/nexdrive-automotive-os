@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Factory, Plus } from "lucide-react";
+import { CalendarClock, Factory, Plus } from "lucide-react";
 import { requireStaff } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Badge, Card, EmptyState, Flash, KpiCard, PageHeader, Progress } from "@/components/ui";
@@ -30,7 +30,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
 
   return (
     <div>
-      <PageHeader title="Jobs" subtitle="Production orders — what to make, on which press, by when." actions={<Link href="/jobs/new" className="btn btn-primary"><Plus size={16} /> New job</Link>} />
+      <PageHeader title="Jobs" subtitle="Production orders — what to make, on which press, by when." actions={<><Link href="/jobs/plan" className="btn btn-secondary"><CalendarClock size={16} /> Press plan</Link><Link href="/jobs/new" className="btn btn-primary"><Plus size={16} /> New job</Link></>} />
       <Flash searchParams={sp} />
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
         <KpiCard label="Running" value={c("RUNNING")} icon={Factory} tone="green" href="/jobs?status=RUNNING" />
