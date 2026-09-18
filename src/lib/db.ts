@@ -34,7 +34,7 @@ export function withPlatform<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 // Models that carry shopId directly.
-const DIRECT = new Set(["User", "Technician", "Bay", "Customer", "Vehicle", "Appointment", "WorkOrder", "Inspection", "Supplier", "Part", "Invoice", "Notification", "Message", "CannedService", "InspectionTemplateItem", "AuditLog", "Integration", "ProductionLine", "Machine", "IngestLog", "ApiKey", "WebhookEndpoint", "ShopSettings", "PurchaseOrder", "Die", "ProductionJob", "Shipment"]);
+const DIRECT = new Set(["User", "Technician", "Bay", "Customer", "Vehicle", "Appointment", "WorkOrder", "Inspection", "Supplier", "Part", "Invoice", "Notification", "Message", "CannedService", "InspectionTemplateItem", "AuditLog", "Integration", "ProductionLine", "Machine", "IngestLog", "ApiKey", "WebhookEndpoint", "ShopSettings", "PurchaseOrder", "Die", "ProductionJob", "Shipment", "QualityCheck", "ScrapEntry", "MaterialLot"]);
 // Child models scoped through their parent relation.
 const VIA: Record<string, string> = { WorkOrderLine: "workOrder", TimeEntry: "workOrder", InspectionItem: "inspection", VehiclePhoto: "vehicle", MaintenanceReminder: "vehicle", StockMovement: "part", Payment: "invoice", CannedServicePart: "cannedService", MachineEvent: "machine", WebhookDelivery: "endpoint", AiMessage: "user", PurchaseOrderLine: "purchaseOrder", ProductionRun: "job", ShipmentLine: "shipment" };
 

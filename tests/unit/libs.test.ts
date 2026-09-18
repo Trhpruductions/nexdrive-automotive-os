@@ -150,3 +150,26 @@ describe("production shifts", () => {
     expect(shiftAt(shifts.slice(0, 2), at(2))).toBeNull();
   });
 });
+
+describe("quality checks", () => {
+  it("parses a check plan defensively and evaluates actuals against nominal +/- tolerance", async () => {
+    const { parseCheckPlan, evaluate } = await import("@/lib/quality");
+    const plan = parseCheckPlan([
+      { name: "Hole dia", nominal: "8.5", tolerance: "0.1", unit: "mm" },
+      { name: "Burr", nominal: "", tolerance: "", unit: "" },
+      { name: "", nominal: 1 },
+      "garbage",
+      null,
+    ]);
+    expect(plan).toEqual([
+      { name: "Hole dia", nominal: 8.5, tolerance: 0.1, unit: "mm" },
+      { name: "Burr", nominal: null, tolerance: null, unit: null },
+    ]);
+    expect(parseCheckPlan("not an array")).toEqual([]);
+    // in tolerance at the boundary, out just past it, pass/fail flag for the non-measured item
+    expect(evaluate(plan, [8.6, null], [false, true]).map((m) => m.ok)).toEqual([true, true]);
+    expect(evaluate(plan, [8.61, null], [false, false]).map((m) => m.ok)).toEqual([false, false]);
+    // a missing actual on a measured feature is a fail, never a silent pass
+    expect(evaluate(plan, [null, null], [false, true])[0].ok).toBe(false);
+  });
+});

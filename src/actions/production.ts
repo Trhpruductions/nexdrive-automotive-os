@@ -1,11 +1,13 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { parseISO } from "date-fns";
 import { revalidatePath } from "next/cache";
 import { db, currentShopId, nextNumber } from "@/lib/db";
 import { requireStaff, BILLING_ROLES, MANAGER_ROLES } from "@/lib/auth";
 import { completeJob, jobNumber, shiftAt, shiftsFor, shipNumber } from "@/lib/production";
 import { getSettings } from "@/lib/settings";
+import { parseCheckPlan } from "@/lib/quality";
 import { emitWebhook } from "@/lib/webhooks";
 import type { DieStatus } from "@/generated/prisma/enums";
 
@@ -26,6 +28,8 @@ export async function saveProduct(formData: FormData) {
     dieId: opt(formData.get("dieId")), pressId: opt(formData.get("pressId")), materialPartId: opt(formData.get("materialPartId")),
     materialPerPiece: dec(formData.get("materialPerPiece")), stdRatePerHour: int(formData.get("stdRatePerHour")) || null, packQty: int(formData.get("packQty")) || null,
     price: dec(formData.get("price")) ?? 0, cost: dec(formData.get("cost")) ?? 0, reorderPoint: int(formData.get("reorderPoint")), location: opt(formData.get("location"), 80),
+    drawingRev: opt(formData.get("drawingRev"), 40), checkEveryPieces: int(formData.get("checkEveryPieces")) || null,
+    checkPlan: parseCheckPlan(formData.getAll("checkName").map((n, i) => ({ name: n, nominal: formData.getAll("checkNominal")[i], tolerance: formData.getAll("checkTol")[i], unit: formData.getAll("checkUnit")[i] }))) as object[],
   };
   const row = id ? await db.part.update({ where: { id }, data }) : await db.part.create({ data: { ...data, shopId: await currentShopId() } });
   revalidatePath("/parts/products");
@@ -82,7 +86,7 @@ export async function createJob(formData: FormData) {
   if (!customerId) redirect("/jobs/new?error=Choose+the+customer");
   const dueRaw = opt(formData.get("dueAt"));
   const job = await db.productionJob.create({
-    data: { shopId: await currentShopId(), number: await nextNumber("job"), partId, customerId, quantity, customerPo: opt(formData.get("customerPo"), 60), dueAt: dueRaw ? new Date(dueRaw) : null, priority: int(formData.get("priority")), machineId: opt(formData.get("machineId")) ?? part.pressId, dieId: opt(formData.get("dieId")) ?? part.dieId, notes: opt(formData.get("notes"), 2000), status: formData.get("release") ? "RELEASED" : "PLANNED" },
+    data: { shopId: await currentShopId(), number: await nextNumber("job"), partId, customerId, quantity, customerPo: opt(formData.get("customerPo"), 60), dueAt: dueRaw ? parseISO(dueRaw) : null, priority: int(formData.get("priority")), machineId: opt(formData.get("machineId")) ?? part.pressId, dieId: opt(formData.get("dieId")) ?? part.dieId, notes: opt(formData.get("notes"), 2000), status: formData.get("release") ? "RELEASED" : "PLANNED" },
   });
   await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "create", entity: "ProductionJob", entityId: job.id, detail: `#${job.number}` } });
   revalidatePath("/jobs");
@@ -92,7 +96,7 @@ export async function createJob(formData: FormData) {
 export async function updateJob(id: string, formData: FormData) {
   await requireStaff(BILLING_ROLES);
   const dueRaw = opt(formData.get("dueAt"));
-  await db.productionJob.update({ where: { id }, data: { quantity: int(formData.get("quantity")) || undefined, customerPo: opt(formData.get("customerPo"), 60), dueAt: dueRaw ? new Date(dueRaw) : null, priority: int(formData.get("priority")), machineId: opt(formData.get("machineId")), dieId: opt(formData.get("dieId")), notes: opt(formData.get("notes"), 2000) } });
+  await db.productionJob.update({ where: { id }, data: { quantity: int(formData.get("quantity")) || undefined, customerPo: opt(formData.get("customerPo"), 60), dueAt: dueRaw ? parseISO(dueRaw) : null, priority: int(formData.get("priority")), machineId: opt(formData.get("machineId")), dieId: opt(formData.get("dieId")), notes: opt(formData.get("notes"), 2000) } });
   revalidatePath(`/jobs/${id}`);
   redirect(`/jobs/${id}?ok=Saved`);
 }
@@ -104,13 +108,14 @@ export async function startJob(id: string, formData: FormData) {
   const machineId = opt(formData.get("machineId")) ?? job.machineId;
   if (!machineId) redirect(`/jobs/${id}?error=Choose+a+press`);
   if (["COMPLETE", "CANCELLED"].includes(job.status)) redirect(`/jobs/${id}?error=Job+is+closed`);
+  if (job.onHold) redirect(`/jobs/${id}?error=${encodeURIComponent(`On quality hold — ${job.holdReason ?? "record a passing check or release the hold first"}`)}`);
   const busy = await db.productionJob.findFirst({ where: { machineId, status: "RUNNING", id: { not: id } } });
   if (busy) redirect(`/jobs/${id}?error=${encodeURIComponent(`${jobNumber(busy.number)} is already running on that press — pause it first`)}`);
   const now = new Date();
   const shifts = await shiftsFor();
   await db.productionJob.update({ where: { id }, data: { status: "RUNNING", machineId, startedAt: job.startedAt ?? now } });
   if (job.dieId) await db.die.update({ where: { id: job.dieId }, data: { machineId } });
-  await db.productionRun.create({ data: { jobId: id, machineId, dieId: job.dieId, technicianId: user.technicianId, operator: user.name, shift: shiftAt(shifts, now), startedAt: now } });
+  await db.productionRun.create({ data: { jobId: id, machineId, dieId: job.dieId, lotId: job.lotId, technicianId: user.technicianId, operator: user.name, shift: shiftAt(shifts, now), startedAt: now } });
   await db.machine.update({ where: { id: machineId }, data: { status: "RUNNING", lastStatusChangeAt: now, lastHeartbeatAt: now } });
   await db.machineEvent.create({ data: { machineId, type: "STATUS", status: "RUNNING", message: `${jobNumber(job.number)} started by ${user.name}` } });
   const { bus } = await import("@/lib/integrations/bus");
@@ -147,8 +152,11 @@ export async function addCounts(id: string, formData: FormData) {
   await db.productionJob.update({ where: { id }, data: { good: { increment: good }, scrap: { increment: scrap } } });
   const run = await db.productionRun.findFirst({ where: { jobId: id, endedAt: null }, orderBy: { startedAt: "desc" } });
   if (run) await db.productionRun.update({ where: { id: run.id }, data: { good: { increment: good }, scrap: { increment: scrap }, downtimeMinutes: { increment: downtime }, downtimeReason: opt(formData.get("reason"), 200) ?? undefined } });
-  else if (job.machineId) { const shifts = await shiftsFor(); await db.productionRun.create({ data: { jobId: id, machineId: job.machineId, dieId: job.dieId, good, scrap, downtimeMinutes: downtime, downtimeReason: opt(formData.get("reason"), 200), shift: shiftAt(shifts, new Date()), startedAt: new Date(), endedAt: new Date() } }); }
+  else if (job.machineId) { const shifts = await shiftsFor(); await db.productionRun.create({ data: { jobId: id, machineId: job.machineId, dieId: job.dieId, lotId: job.lotId, good, scrap, downtimeMinutes: downtime, downtimeReason: opt(formData.get("reason"), 200), shift: shiftAt(shifts, new Date()), startedAt: new Date(), endedAt: new Date() } }); }
   if (job.dieId && good + scrap > 0) await db.die.update({ where: { id: job.dieId }, data: { hitCount: { increment: good + scrap } } });
+  // scrap with a reason feeds the Pareto; unclassified scrap still counts on the job
+  const scrapReason = opt(formData.get("scrapReason"), 80);
+  if (scrap > 0 && scrapReason) await db.scrapEntry.create({ data: { shopId: await currentShopId(), jobId: id, runId: run?.id ?? null, dieId: job.dieId, lotId: run?.lotId ?? job.lotId, quantity: scrap, reason: scrapReason } });
   revalidatePath(`/jobs/${id}`);
   redirect(`/jobs/${id}?ok=Counts+added`);
 }

@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { parseISO } from "date-fns";
 import { revalidatePath } from "next/cache";
 import { db, currentShopId, nextNumber } from "@/lib/db";
 import { requireStaff, BILLING_ROLES } from "@/lib/auth";
@@ -27,7 +28,7 @@ export async function createPurchaseOrder(formData: FormData) {
   if (custom) lines.push({ partId: null as unknown as string, description: custom, quantity: Math.max(1, Math.trunc(Number(formData.get("customQty")) || 1)), unitCost: Number(formData.get("customCost")) || 0, sortOrder: lines.length } as never);
   if (!lines.length) redirect(`/parts/orders/new?supplierId=${supplierId}&error=Add+at+least+one+line`);
   const po = await db.purchaseOrder.create({
-    data: { shopId: await currentShopId(), number: await nextNumber("po"), supplierId, notes: opt(formData.get("notes")), expectedAt: formData.get("expectedAt") ? new Date(String(formData.get("expectedAt"))) : null, lines: { create: lines.map((l) => ({ ...l, partId: l.partId || null })) } },
+    data: { shopId: await currentShopId(), number: await nextNumber("po"), supplierId, notes: opt(formData.get("notes")), expectedAt: formData.get("expectedAt") ? parseISO(String(formData.get("expectedAt"))) : null, lines: { create: lines.map((l) => ({ ...l, partId: l.partId || null })) } },
   });
   await db.auditLog.create({ data: { shopId: await currentShopId(), userId: user.id, action: "create", entity: "PurchaseOrder", entityId: po.id, detail: `#${po.number}` } });
   revalidatePath("/parts/orders");

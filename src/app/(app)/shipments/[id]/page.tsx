@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Receipt, Truck } from "lucide-react";
+import { FileCheck2, Receipt, Tag, Truck } from "lucide-react";
 import { requireStaff, BILLING_ROLES } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getSettings, shopAddress } from "@/lib/settings";
@@ -11,6 +11,7 @@ import { PrintButton } from "@/components/app/print-button";
 import { invoiceShipment, markShipped } from "@/actions/production";
 import { fmtDate, money, num } from "@/lib/format";
 import { jobNumber, shipNumber } from "@/lib/production";
+import { shipmentTrace } from "@/lib/quality";
 
 export default async function ShipmentPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ok?: string; error?: string }> }) {
   await requireStaff(BILLING_ROLES);
@@ -21,6 +22,7 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
     getSettings(),
   ]);
   if (!s) notFound();
+  const trace = await shipmentTrace(s.id);
   const pieces = s.lines.reduce((a, l) => a + l.quantity, 0);
   const value = s.lines.reduce((a, l) => a + l.quantity * Number(l.unitPrice), 0);
   return (
@@ -32,6 +34,8 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
         actions={
           <>
             <PrintButton />
+            <Link href={`/shipments/${s.id}/labels`} className="btn btn-secondary"><Tag size={15} /> Carton labels</Link>
+            <Link href={`/shipments/${s.id}/coc`} className="btn btn-secondary"><FileCheck2 size={15} /> C of C</Link>
             {s.status === "DRAFT" ? <form action={markShipped.bind(null, s.id)}><ConfirmButton message={`Mark ${shipNumber(s.number)} shipped? ${num(pieces)} pieces leave finished-goods stock.`} className="btn btn-primary"><Truck size={15} /> Mark shipped</ConfirmButton></form> : null}
             {s.status === "SHIPPED" && !s.invoice ? <form action={invoiceShipment.bind(null, s.id)}><button className="btn btn-primary"><Receipt size={15} /> Create invoice</button></form> : null}
             {s.invoice ? <Link href={`/invoices/${s.invoice.id}`} className="btn btn-secondary"><Receipt size={15} /> INV-{String(s.invoice.number).padStart(5, "0")}</Link> : null}
@@ -66,12 +70,13 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
           <div><div className="card-title mb-1">Customer POs</div><div>{[...new Set(s.lines.map((l) => l.job?.customerPo).filter(Boolean))].join(", ") || "—"}</div></div>
         </div>
         <table className="table mt-8">
-          <thead><tr><th>Part</th><th>Job</th><th className="text-right">Quantity</th><th className="text-right">Cartons</th><th className="text-right">Unit price</th><th className="text-right">Amount</th></tr></thead>
+          <thead><tr><th>Part</th><th>Job</th><th>Lot / heat</th><th className="text-right">Quantity</th><th className="text-right">Cartons</th><th className="text-right">Unit price</th><th className="text-right">Amount</th></tr></thead>
           <tbody>
             {s.lines.map((l) => (
               <tr key={l.id}>
                 <td><div className="font-medium">{l.part.sku}</div><div className="text-xs text-muted">{l.part.name}{l.part.customerPartNumber ? ` · cust. ${l.part.customerPartNumber}` : ""}</div></td>
                 <td className="text-xs text-muted">{l.job ? jobNumber(l.job.number) : "stock"}</td>
+                <td className="text-xs font-mono text-muted">{trace.get(l.id)?.lots.map((x) => `${x.lotNumber}${x.heatNumber ? ` / ${x.heatNumber}` : ""}`).join(", ") || "—"}</td>
                 <td className="text-right tabular-nums">{num(l.quantity)} {l.part.unit}</td>
                 <td className="text-right tabular-nums text-muted">{l.part.packQty ? Math.ceil(l.quantity / l.part.packQty) : "—"}</td>
                 <td className="text-right tabular-nums">{money(l.unitPrice)}</td>

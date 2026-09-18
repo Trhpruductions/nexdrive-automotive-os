@@ -55,6 +55,9 @@ model Shop {
   dies           Die[]
   jobs           ProductionJob[]
   shipments      Shipment[]
+  qualityChecks  QualityCheck[]
+  scrapEntries   ScrapEntry[]
+  materialLots   MaterialLot[]
   technicians    Technician[]
   bays           Bay[]
   customers      Customer[]
@@ -120,6 +123,7 @@ model User {
   technician Technician?
   auditLogs  AuditLog[]
   aiMessages AiMessage[]
+  qualityChecks QualityCheck[]
   passwordResets PasswordResetToken[]
   memberships    ShopMember[]
 
@@ -555,6 +559,11 @@ model Part {
   materialPerPiece   Decimal?  @db.Decimal(12, 4)
   stdRatePerHour     Int?
   packQty            Int?
+  drawingRev         String?
+  /// [{name,nominal,tolerance,unit}] — what to measure at first piece / in-process checks
+  checkPlan          Json      @default("[]")
+  checkEveryPieces   Int?
+  lots               MaterialLot[]
   jobs               ProductionJob[]
   shipmentLines      ShipmentLine[]
   location       String?
@@ -623,6 +632,8 @@ model Die {
   products Part[]
   jobs     ProductionJob[]
   runs     ProductionRun[]
+  checks   QualityCheck[]
+  scrap    ScrapEntry[]
 
   shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
   shopId String
@@ -656,6 +667,9 @@ model ProductionJob {
   notes       String?
   startedAt   DateTime?
   completedAt DateTime?
+  firstPieceAt DateTime?
+  onHold      Boolean   @default(false)
+  holdReason  String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -667,9 +681,14 @@ model ProductionJob {
   machineId  String?
   die        Die?     @relation(fields: [dieId], references: [id], onDelete: SetNull)
   dieId      String?
+  // coil / bundle currently feeding the press
+  lot        MaterialLot? @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  lotId      String?
 
   runs          ProductionRun[]
   shipmentLines ShipmentLine[]
+  checks        QualityCheck[]
+  scrapEntries  ScrapEntry[]
 
   shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
   shopId String
@@ -700,9 +719,109 @@ model ProductionRun {
   dieId        String?
   technician   Technician?   @relation(fields: [technicianId], references: [id], onDelete: SetNull)
   technicianId String?
+  lot          MaterialLot?  @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  lotId        String?
+
+  checks       QualityCheck[]
+  scrapEntries ScrapEntry[]
 
   @@index([jobId])
   @@index([machineId, startedAt])
+}
+
+enum QcKind {
+  FIRST_PIECE
+  IN_PROCESS
+  FINAL
+}
+
+enum QcResult {
+  PASS
+  FAIL
+}
+
+/** A quality check on a job: first piece before the run, in-process every N pieces, final before it ships. Measurements follow the product's check plan. */
+model QualityCheck {
+  id           String   @id @default(cuid())
+  kind         QcKind
+  result       QcResult
+  pieceCount   Int      @default(0)
+  /// [{name,nominal,tolerance,unit,actual,ok}]
+  measurements Json     @default("[]")
+  notes        String?
+  inspector    String?
+  checkedAt    DateTime @default(now())
+
+  job    ProductionJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId  String
+  run    ProductionRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
+  runId  String?
+  die    Die?           @relation(fields: [dieId], references: [id], onDelete: SetNull)
+  dieId  String?
+  lot    MaterialLot?   @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  lotId  String?
+  user   User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId String?
+
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@index([shopId, checkedAt])
+  @@index([jobId])
+}
+
+/** Scrap with a reason, so the Pareto says where the pieces went. */
+model ScrapEntry {
+  id       String   @id @default(cuid())
+  quantity Int
+  reason   String
+  notes    String?
+  at       DateTime @default(now())
+
+  job   ProductionJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId String
+  run   ProductionRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
+  runId String?
+  die   Die?           @relation(fields: [dieId], references: [id], onDelete: SetNull)
+  dieId String?
+  lot   MaterialLot?   @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  lotId String?
+
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@index([shopId, at])
+  @@index([jobId])
+}
+
+/** A received coil / bundle of material with its lot and heat number — traceable through runs to the parts that shipped. */
+model MaterialLot {
+  id         String   @id @default(cuid())
+  lotNumber  String
+  heatNumber String?
+  supplier   String?
+  quantity   Decimal  @db.Decimal(12, 2)
+  remaining  Decimal  @db.Decimal(12, 2)
+  unit       String   @default("lb")
+  receivedAt DateTime @default(now())
+  certOnFile Boolean  @default(false)
+  location   String?
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  part   Part   @relation(fields: [partId], references: [id], onDelete: Cascade)
+  partId String
+
+  runs   ProductionRun[]
+  jobs   ProductionJob[]
+  checks QualityCheck[]
+  scrap  ScrapEntry[]
+
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@unique([shopId, partId, lotNumber])
+  @@index([shopId, partId])
 }
 
 enum ShipmentStatus {

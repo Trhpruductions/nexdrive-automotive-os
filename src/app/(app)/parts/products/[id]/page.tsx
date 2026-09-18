@@ -8,6 +8,7 @@ import { fmtDate, money, num } from "@/lib/format";
 import { jobNumber } from "@/lib/production";
 import { ProductForm } from "../product-form";
 import { productOptions } from "../options";
+import { parseCheckPlan } from "@/lib/quality";
 
 export default async function ProductPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ok?: string; error?: string }> }) {
   const user = await requireStaff();
@@ -66,7 +67,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
         <div>
           {can(user, MANAGER_ROLES) ? (
             <Card title="Product details">
-              <ProductForm values={{ ...p, materialPerPiece: p.materialPerPiece ? Number(p.materialPerPiece) : null, price, cost }} {...opts} />
+              <ProductForm values={{ ...p, materialPerPiece: p.materialPerPiece ? Number(p.materialPerPiece) : null, price, cost, checkPlan: parseCheckPlan(p.checkPlan) }} {...opts} />
             </Card>
           ) : null}
         </div>

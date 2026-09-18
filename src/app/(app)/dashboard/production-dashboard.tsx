@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { AlertTriangle, CircleDollarSign, Factory, Gauge, Hammer, Package, Truck } from "lucide-react";
+import { AlertTriangle, CircleDollarSign, ClipboardCheck, Factory, Gauge, Hammer, Package, Truck } from "lucide-react";
 import { endOfDay, startOfDay, subDays } from "date-fns";
 import { db } from "@/lib/db";
 import { Badge, Card, KpiCard, Progress, ViewAll } from "@/components/ui";
 import { LiveFloor } from "@/app/(app)/production/live-floor";
 import { productionSnapshot } from "@/lib/integrations/snapshot";
 import { diesDueForService, jobNumber, pressDay } from "@/lib/production";
+import { qualityQueue } from "@/lib/quality";
 import { fmtDate, greeting, money, num } from "@/lib/format";
 import type { ShopSettings } from "@/lib/settings";
 
@@ -13,7 +14,7 @@ import type { ShopSettings } from "@/lib/settings";
 export async function ProductionDashboard({ settings, userName }: { settings: ShopSettings; userName: string }) {
   const now = new Date();
   const today = { gte: startOfDay(now), lte: endOfDay(now) };
-  const [snap, presses, jobs, lateJobs, todayCounts, diesDue, shipmentsWeek, openInvoices, lowMaterial, readyToShip] = await Promise.all([
+  const [snap, presses, jobs, lateJobs, todayCounts, diesDue, shipmentsWeek, openInvoices, lowMaterial, readyToShip, qc] = await Promise.all([
     productionSnapshot(),
     db.machine.findMany({ where: { active: true }, orderBy: { code: "asc" }, select: { id: true, code: true, name: true, status: true } }),
     db.productionJob.findMany({ where: { status: { in: ["RUNNING", "PAUSED", "RELEASED", "PLANNED"] } }, include: { part: { select: { sku: true, name: true } }, customer: { select: { company: true, firstName: true, lastName: true } }, machine: { select: { code: true } } }, orderBy: [{ status: "asc" }, { dueAt: "asc" }], take: 8 }),
@@ -24,6 +25,7 @@ export async function ProductionDashboard({ settings, userName }: { settings: Sh
     db.invoice.aggregate({ _sum: { total: true, amountPaid: true }, _count: { _all: true }, where: { status: { in: ["SENT", "PARTIAL"] } } }),
     db.part.findMany({ where: { kind: "MATERIAL", active: true }, select: { id: true, sku: true, name: true, unit: true, quantityOnHand: true, reorderPoint: true } }),
     db.productionJob.findMany({ where: { status: "COMPLETE" }, select: { good: true, shipped: true } }),
+    qualityQueue(),
   ]);
   const oee = await Promise.all(presses.map(async (p) => ({ code: p.code, ...(await pressDay(p.id, now)) })));
   const withOee = oee.filter((o) => o.oee != null);
@@ -80,6 +82,22 @@ export async function ProductionDashboard({ settings, userName }: { settings: Sh
           </ul>
         </Card>
       </div>
+
+      {qc.length ? (
+        <Card title="Quality — needs an inspector" action={<ViewAll href="/production/reports" />} padded={false}>
+          <ul className="divide-y divide-border">
+            {qc.map(({ job, need }) => (
+              <li key={job.id} className="px-5 py-2.5 flex items-center gap-3 text-sm">
+                <ClipboardCheck size={14} className={need === "hold" ? "text-red-400" : need === "first_piece" ? "text-amber-400" : "text-blue-400"} />
+                <Link href={`/jobs/${job.id}`} className="font-medium hover:text-accent">{jobNumber(job.number)}</Link>
+                <span className="text-muted truncate">· {job.part.sku}{job.machine ? ` · ${job.machine.code}` : ""}</span>
+                <Badge tone={need === "hold" ? "red" : need === "first_piece" ? "amber" : "blue"} className="ml-auto">{need === "hold" ? "on hold" : need === "first_piece" ? "first piece" : "check due"}</Badge>
+                <Link href={`/jobs/${job.id}/check${need === "first_piece" ? "?kind=FIRST_PIECE" : ""}`} className="btn btn-secondary btn-sm">Check</Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <Card title="Tooling" action={<ViewAll href="/tooling" />}>

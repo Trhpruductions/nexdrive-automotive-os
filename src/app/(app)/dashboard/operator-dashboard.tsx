@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { differenceInMinutes } from "date-fns";
-import { Factory, Pause, Play, Save } from "lucide-react";
+import { ClipboardCheck, Factory, Pause, Play, Save, ShieldAlert } from "lucide-react";
 import { db } from "@/lib/db";
 import { Badge, Card, Field, Progress } from "@/components/ui";
 import { addCounts, pauseJob, startJob } from "@/actions/production";
+import { setJobLot } from "@/actions/quality";
+import { parseCheckPlan, SCRAP_REASONS } from "@/lib/quality";
 import { greeting, num } from "@/lib/format";
 import { jobNumber } from "@/lib/production";
 
@@ -14,9 +16,12 @@ import { jobNumber } from "@/lib/production";
 export async function OperatorDashboard({ userName }: { userName: string }) {
   const now = new Date();
   const [presses, queue] = await Promise.all([
-    db.machine.findMany({ where: { active: true }, orderBy: { code: "asc" }, include: { jobs: { where: { status: { in: ["RUNNING", "PAUSED"] } }, include: { part: { select: { sku: true, name: true, stdRatePerHour: true } }, die: { select: { code: true } }, runs: { where: { endedAt: null }, take: 1 } }, orderBy: { status: "asc" }, take: 1 } } }),
+    db.machine.findMany({ where: { active: true }, orderBy: { code: "asc" }, include: { jobs: { where: { status: { in: ["RUNNING", "PAUSED"] } }, include: { part: { select: { sku: true, name: true, stdRatePerHour: true, checkPlan: true, checkEveryPieces: true, materialPartId: true } }, die: { select: { code: true } }, lot: { select: { id: true, lotNumber: true, heatNumber: true } }, runs: { where: { endedAt: null }, take: 1 }, checks: { where: { result: "PASS" }, orderBy: { checkedAt: "desc" }, take: 1, select: { pieceCount: true } } }, orderBy: { status: "asc" }, take: 1 } } }),
     db.productionJob.findMany({ where: { status: "RELEASED" }, include: { part: { select: { sku: true } }, machine: { select: { code: true } } }, orderBy: [{ priority: "desc" }, { dueAt: "asc" }], take: 6 }),
   ]);
+  // coils with material left, for the coil-change picker on each press
+  const materialIds = [...new Set(presses.flatMap((p) => p.jobs.map((j) => j.part.materialPartId)).filter((x): x is string => !!x))];
+  const lots = materialIds.length ? await db.materialLot.findMany({ where: { partId: { in: materialIds }, remaining: { gt: 0 } }, orderBy: { receivedAt: "asc" }, select: { id: true, partId: true, lotNumber: true, heatNumber: true, remaining: true, unit: true } }) : [];
   return (
     <div className="space-y-5">
       <div>
@@ -31,6 +36,9 @@ export async function OperatorDashboard({ userName }: { userName: string }) {
           const scrapPct = j && j.good + j.scrap ? (j.scrap / (j.good + j.scrap)) * 100 : 0;
           const runMin = run ? differenceInMinutes(now, run.startedAt) : 0;
           const rate = run && runMin > 0 ? Math.round(((run.good + run.scrap) / runMin) * 60) : null;
+          const wantsCheck = j ? parseCheckPlan(j.part.checkPlan).length > 0 || j.part.checkEveryPieces != null : false;
+          const checkDue = j && j.part.checkEveryPieces && j.firstPieceAt ? j.good >= (j.checks[0]?.pieceCount ?? 0) + j.part.checkEveryPieces : false;
+          const jobLots = j ? lots.filter((l) => l.partId === j.part.materialPartId) : [];
           return (
             <Card key={p.id} className={p.status === "RUNNING" ? "border-emerald-500/40" : p.status === "DOWN" ? "border-red-500/40" : ""}>
               <div className="flex items-center justify-between gap-2">
@@ -49,6 +57,13 @@ export async function OperatorDashboard({ userName }: { userName: string }) {
                     <div className="rounded-lg bg-bg-elevated p-3"><div className="text-3xl font-semibold tabular-nums">{rate ?? "—"}</div><div className="text-[11px] text-muted">pcs/h{j.part.stdRatePerHour ? ` · std ${num(j.part.stdRatePerHour)}` : ""}</div></div>
                   </div>
                   <Progress value={pct} tone={pct >= 1 ? "green" : "blue"} className="mt-3" />
+                  {j.onHold ? (
+                    <div className="mt-3 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm flex items-center gap-2"><ShieldAlert size={16} className="text-red-400 shrink-0" /><span className="flex-1"><strong>Hold</strong> — {j.holdReason}</span><Link href={`/jobs/${j.id}/check`} className="btn btn-primary btn-sm">Re-check</Link></div>
+                  ) : wantsCheck && !j.firstPieceAt ? (
+                    <div className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm flex items-center gap-2"><ClipboardCheck size={16} className="text-amber-400 shrink-0" /><span className="flex-1">First piece not approved yet</span><Link href={`/jobs/${j.id}/check?kind=FIRST_PIECE`} className="btn btn-primary btn-sm">First piece</Link></div>
+                  ) : checkDue ? (
+                    <div className="mt-3 rounded-lg border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-sm flex items-center gap-2"><ClipboardCheck size={16} className="text-blue-400 shrink-0" /><span className="flex-1">In-process check due (every {num(j.part.checkEveryPieces ?? 0)})</span><Link href={`/jobs/${j.id}/check?kind=IN_PROCESS`} className="btn btn-primary btn-sm">Check</Link></div>
+                  ) : null}
                   <div className="mt-4 flex flex-wrap gap-2">
                     {j.status === "RUNNING" ? (
                       <form action={pauseJob.bind(null, j.id)} className="flex gap-2 flex-1 min-w-[260px]">
@@ -68,7 +83,18 @@ export async function OperatorDashboard({ userName }: { userName: string }) {
                     <Field label="Downtime min"><input name="downtime" type="number" min={0} defaultValue={0} className="input py-3" /></Field>
                     <button className="btn btn-secondary py-3"><Save size={15} /> Add</button>
                     <input type="hidden" name="reason" value="" />
+                    <Field label="Scrap reason" className="col-span-4"><select name="scrapReason" defaultValue="" className="select py-2"><option value="">— why the scrap? —</option>{SCRAP_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}</select></Field>
                   </form>
+                  {j.part.materialPartId ? (
+                    <form action={setJobLot.bind(null, j.id)} className="mt-2 flex items-center gap-2">
+                      <span className="text-xs text-muted shrink-0">Coil</span>
+                      <select name="lotId" defaultValue={j.lot?.id ?? ""} className="select py-2 flex-1 text-sm">
+                        <option value="">— none —</option>
+                        {(j.lot && !jobLots.some((l) => l.id === j.lot?.id) ? [{ id: j.lot.id, lotNumber: j.lot.lotNumber, heatNumber: j.lot.heatNumber, remaining: 0, unit: "" }, ...jobLots] : jobLots).map((l) => <option key={l.id} value={l.id}>{l.lotNumber}{l.heatNumber ? ` / ${l.heatNumber}` : ""}{l.unit ? ` · ${num(Math.round(Number(l.remaining)))} ${l.unit}` : ""}</option>)}
+                      </select>
+                      <button className="btn btn-ghost btn-sm shrink-0">{j.status === "RUNNING" ? "Change coil" : "Set"}</button>
+                    </form>
+                  ) : null}
                 </div>
               ) : (
                 <div className="mt-3 text-sm text-muted">

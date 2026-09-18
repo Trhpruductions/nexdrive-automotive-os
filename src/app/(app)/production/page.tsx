@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { BarChart3, Plus, Settings2, Trash2 } from "lucide-react";
+import { BarChart3, ClipboardCheck, Plus, Settings2, Trash2 } from "lucide-react";
 import { requireStaff, can, MANAGER_ROLES } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getSettings } from "@/lib/settings";
 import { productionSnapshot } from "@/lib/integrations/snapshot";
 import { Card, Flash, PageHeader } from "@/components/ui";
 import { ConfirmButton } from "@/components/app/confirm-button";
@@ -14,8 +15,9 @@ export const dynamic = "force-dynamic";
 export default async function ProductionPage({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string; manage?: string }> }) {
   const user = await requireStaff();
   const sp = await searchParams;
-  const [snap, lines] = await Promise.all([productionSnapshot(), db.productionLine.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] })]);
+  const [snap, lines, settings] = await Promise.all([productionSnapshot(), db.productionLine.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }), getSettings()]);
   const manager = can(user, MANAGER_ROLES);
+  const manufacturing = settings.modules.includes("jobs");
 
   return (
     <div>
@@ -25,6 +27,7 @@ export default async function ProductionPage({ searchParams }: { searchParams: P
         actions={
           <>
             {manager ? <Link href="/production/report" className="btn btn-secondary"><BarChart3 size={15} /> Shift & OEE</Link> : null}
+            {manager && manufacturing ? <Link href="/production/reports" className="btn btn-secondary"><ClipboardCheck size={15} /> Scrap & quality</Link> : null}
             {manager ? <Link href="/settings?tab=integrations" className="btn btn-secondary"><Settings2 size={15} /> Feeds</Link> : null}
             {manager ? <Link href={sp.manage ? "/production" : "/production?manage=1"} className="btn btn-primary"><Plus size={15} /> {sp.manage ? "Hide setup" : "Lines & machines"}</Link> : null}
           </>

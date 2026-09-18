@@ -6,7 +6,7 @@ import { Badge, Card, EmptyState, Flash, KpiCard, PageHeader } from "@/component
 import { ListFilters, Pagination } from "@/components/app/search-bar";
 import { money, num } from "@/lib/format";
 import { getSettings } from "@/lib/settings";
-import { Boxes, DollarSign } from "lucide-react";
+import { Boxes, DollarSign, Layers } from "lucide-react";
 
 export const metadata = { title: "Parts & Inventory" };
 const PAGE = 40;
@@ -42,7 +42,7 @@ export default async function PartsPage({ searchParams }: { searchParams: Promis
         actions={
           <>
             <a href="/api/export/parts" className="btn btn-secondary" download><Download size={16} /> Export CSV</a>
-            {productsOn ? <Link href="/parts/products" className="btn btn-secondary"><Boxes size={16} /> Products</Link> : null}
+            {productsOn ? <><Link href="/parts/lots" className="btn btn-secondary"><Layers size={16} /> Material lots</Link><Link href="/parts/products" className="btn btn-secondary"><Boxes size={16} /> Products</Link></> : null}
             <Link href="/parts/orders" className="btn btn-secondary"><ClipboardList size={16} /> Purchase orders</Link>
             <Link href="/parts/suppliers" className="btn btn-secondary"><Truck size={16} /> Suppliers</Link>
             <Link href="/parts/scan" className="btn btn-secondary"><ScanBarcode size={16} /> Scan</Link>

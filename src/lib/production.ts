@@ -50,7 +50,7 @@ export async function applyPressCount(machineId: string, good: number, scrap: nu
   if (run) await db.productionRun.update({ where: { id: run.id }, data: { good: { increment: good }, scrap: { increment: scrap } } });
   else {
     const shifts = await shiftsFor();
-    await db.productionRun.create({ data: { jobId: job.id, machineId, dieId: job.dieId, shift: shiftAt(shifts, at), good, scrap, startedAt: at } });
+    await db.productionRun.create({ data: { jobId: job.id, machineId, dieId: job.dieId, lotId: job.lotId, shift: shiftAt(shifts, at), good, scrap, startedAt: at } });
   }
   if (job.dieId && hits > 0) await db.die.update({ where: { id: job.dieId }, data: { hitCount: { increment: hits } } });
   // auto-complete when the order quantity is reached
@@ -77,6 +77,7 @@ export async function completeJob(jobId: string, reason?: string) {
     materialUsed = Math.round(perPiece * (job.good + job.scrap) * 10000) / 10000;
     await db.part.update({ where: { id: job.part.materialPartId }, data: { quantityOnHand: { decrement: Math.round(materialUsed) } } });
     await db.stockMovement.create({ data: { partId: job.part.materialPartId, delta: -Math.round(materialUsed), reason: "Consumed in production", reference: jobNumber(job.number) } });
+    await consumeFromLots(jobId, job.lotId, materialUsed);
   }
   const updated = await db.productionJob.update({ where: { id: jobId }, data: { status: "COMPLETE", completedAt: now, materialUsed, notes: reason ? `${job.notes ? job.notes + "\n" : ""}Completed: ${reason}` : job.notes } });
   if (job.machineId) {
@@ -84,6 +85,36 @@ export async function completeJob(jobId: string, reason?: string) {
     if (!other) await db.machine.updateMany({ where: { id: job.machineId, status: "RUNNING" }, data: { status: "IDLE", lastStatusChangeAt: now } });
   }
   return updated;
+}
+
+/**
+ * Split the material a job used across the coils it ran on: each run carries the
+ * lot that was feeding the press, so usage is pro-rated by that run's hits. Runs
+ * without a lot fall back to the job's current coil.
+ */
+async function consumeFromLots(jobId: string, jobLotId: string | null, materialUsed: number) {
+  const runs = await db.productionRun.findMany({ where: { jobId }, select: { lotId: true, good: true, scrap: true } });
+  const byLot = new Map<string, number>();
+  let hits = 0;
+  for (const r of runs) {
+    const lot = r.lotId ?? jobLotId;
+    if (!lot) continue;
+    const h = r.good + r.scrap;
+    byLot.set(lot, (byLot.get(lot) ?? 0) + h);
+    hits += h;
+  }
+  if (!hits) {
+    if (!jobLotId) return;
+    byLot.set(jobLotId, 1);
+    hits = 1;
+  }
+  for (const [lotId, h] of byLot) {
+    const qty = Math.round((materialUsed * h) / hits * 100) / 100;
+    const lot = await db.materialLot.findUnique({ where: { id: lotId }, select: { remaining: true } });
+    if (!lot) continue;
+    const remaining = Math.max(0, Math.round((Number(lot.remaining) - qty) * 100) / 100);
+    await db.materialLot.update({ where: { id: lotId }, data: { remaining } });
+  }
 }
 
 /** Dies needing service: hits since last service ≥ interval. */

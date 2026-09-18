@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarClock, Factory, Plus } from "lucide-react";
+import { BarChart3, CalendarClock, Factory, Plus } from "lucide-react";
 import { requireStaff } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Badge, Card, EmptyState, Flash, KpiCard, PageHeader, Progress } from "@/components/ui";
@@ -30,7 +30,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
 
   return (
     <div>
-      <PageHeader title="Jobs" subtitle="Production orders — what to make, on which press, by when." actions={<><Link href="/jobs/plan" className="btn btn-secondary"><CalendarClock size={16} /> Press plan</Link><Link href="/jobs/new" className="btn btn-primary"><Plus size={16} /> New job</Link></>} />
+      <PageHeader title="Jobs" subtitle="Production orders — what to make, on which press, by when." actions={<><Link href="/production/reports" className="btn btn-secondary"><BarChart3 size={16} /> Reports</Link><Link href="/jobs/plan" className="btn btn-secondary"><CalendarClock size={16} /> Press plan</Link><Link href="/jobs/new" className="btn btn-primary"><Plus size={16} /> New job</Link></>} />
       <Flash searchParams={sp} />
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
         <KpiCard label="Running" value={c("RUNNING")} icon={Factory} tone="green" href="/jobs?status=RUNNING" />
@@ -77,7 +77,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
                     <td><div className="flex items-center gap-2"><Progress value={pct} tone={pct >= 1 ? "green" : "blue"} className="flex-1" /><span className="text-xs tabular-nums whitespace-nowrap">{num(j.good)} / {num(j.quantity)}</span></div></td>
                     <td className={`text-right tabular-nums text-xs ${j.good + j.scrap && j.scrap / (j.good + j.scrap) > 0.03 ? "text-amber-400" : "text-muted"}`}>{j.scrap}</td>
                     <td className={`text-xs ${lateRow ? "text-red-400 font-semibold" : "text-muted"}`}>{fmtDate(j.dueAt)}</td>
-                    <td><Badge tone={STATUS[j.status].tone}>{STATUS[j.status].label}</Badge></td>
+                    <td><Badge tone={STATUS[j.status].tone}>{STATUS[j.status].label}</Badge>{j.onHold ? <Badge tone="red" className="ml-1">hold</Badge> : null}</td>
                   </tr>
                 );
               })}
