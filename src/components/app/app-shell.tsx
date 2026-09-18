@@ -7,6 +7,7 @@ import { Bell, Calendar, Car, ChevronDown, LayoutDashboard, LogOut, Menu, MoreHo
 import { Sidebar } from "./sidebar";
 import type { NavItem } from "@/lib/nav";
 import { logout } from "@/actions/auth";
+import { LocationSwitcher } from "./location-switcher";
 import { ROLE_LABEL } from "@/lib/constants";
 import { initials } from "@/lib/format";
 
@@ -16,6 +17,8 @@ export function AppShell({
   shopName,
   logoUrl,
   unread,
+  locations = [],
+  activeShopId = "",
   children,
 }: {
   nav: NavItem[];
@@ -23,6 +26,8 @@ export function AppShell({
   shopName: string;
   logoUrl: string | null;
   unread: number;
+  locations?: { shopId: string; name: string; role: string }[];
+  activeShopId?: string;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -49,6 +54,7 @@ export function AppShell({
             <Menu size={20} />
           </button>
 
+          <LocationSwitcher locations={locations} activeShopId={activeShopId} />
           <form onSubmit={submitSearch} className="ml-auto relative w-full max-w-xs sm:max-w-sm">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
             <input

@@ -14,8 +14,9 @@ export const TEMPLATE_EVENTS = [
   { key: "appointment_confirmed", label: "Appointment confirmed", vars: ["customer", "vehicle", "date", "time", "shop"] },
   { key: "invoice_ready", label: "Invoice ready", vars: ["customer", "invoice", "total", "link", "shop"] },
   { key: "payment_received", label: "Payment received", vars: ["customer", "amount", "invoice", "shop"] },
-  { key: "reminder_due", label: "Maintenance reminder due", vars: ["customer", "vehicle", "service", "date", "shop", "phone"] },
+  { key: "reminder_due", label: "Maintenance reminder due", vars: ["customer", "vehicle", "service", "date", "link", "shop", "phone"] },
   { key: "appointment_reminder", label: "Appointment reminder (day before)", vars: ["customer", "vehicle", "date", "time", "service", "shop", "phone"] },
+  { key: "estimate_followup", label: "Estimate follow-up (2 days, no answer)", vars: ["customer", "vehicle", "total", "link", "shop", "phone"] },
 ] as const;
 export type TemplateKey = (typeof TEMPLATE_EVENTS)[number]["key"];
 
@@ -27,8 +28,9 @@ export const DEFAULT_TEMPLATES: Record<TemplateKey, { subject: string; body: str
   appointment_confirmed: { subject: "Appointment confirmed", body: "Hi {customer}, see you {date} at {time} for your {vehicle}. — {shop}" },
   invoice_ready: { subject: "Invoice {invoice}", body: "Hi {customer}, your invoice {invoice} for {total} is ready. View and pay here: {link} — {shop}" },
   payment_received: { subject: "Payment received — thank you", body: "Hi {customer}, we received your payment of {amount} for invoice {invoice}. Thank you! — {shop}" },
-  reminder_due: { subject: "Service reminder: {service}", body: "Hi {customer}, your {vehicle} is due for {service} ({date}). Book online or call {phone} to schedule. — {shop}" },
+  reminder_due: { subject: "Service reminder: {service}", body: "Hi {customer}, your {vehicle} is due for {service} ({date}). Book online: {link} or call {phone}. — {shop}" },
   appointment_reminder: { subject: "Reminder: your appointment {date}", body: "Hi {customer}, a reminder that your {vehicle} is booked for {service} on {date} at {time}. Reply or call {phone} if you need to change it. — {shop}" },
+  estimate_followup: { subject: "Still thinking it over? Your {vehicle} estimate", body: "Hi {customer}, just checking in on the estimate for your {vehicle} ({total}). You can approve or decline any line here: {link} — or call {phone} with questions. — {shop}" },
 };
 
 /** Public base URL for links in messages (APP_URL in production). */

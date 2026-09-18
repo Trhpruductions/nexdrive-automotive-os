@@ -58,6 +58,14 @@ export async function destroySession() {
   jar.delete(SHOP_COOKIE);
 }
 
+/** Every location this user can work in (home shop first). */
+export async function userLocations(userId: string) {
+  const u = await rawDb.user.findUnique({ where: { id: userId }, select: { shopId: true, role: true, shop: { select: { id: true, name: true, settings: { select: { name: true } } } }, memberships: { include: { shop: { select: { id: true, name: true, settings: { select: { name: true } } } } }, orderBy: { createdAt: "asc" } } } });
+  if (!u) return [];
+  const home = u.shop ? [{ shopId: u.shop.id, name: u.shop.settings?.name ?? u.shop.name, role: u.role }] : [];
+  return [...home, ...u.memberships.map((m) => ({ shopId: m.shop.id, name: m.shop.settings?.name ?? m.shop.name, role: m.role }))];
+}
+
 /** Super-admin: open a shop (all shop-scoped queries then run as that shop). */
 export async function setActiveShop(shopId: string | null) {
   const jar = await cookies();
@@ -88,12 +96,21 @@ export const getSession = cache(async (): Promise<SessionUser | null> => {
   if (!user || !user.active) return null;
   let activeShopId = user.shopId;
   let shopStatus: ShopStatus | null = user.shop?.status ?? null;
+  let role = user.role;
   if (user.role === "SUPERADMIN") {
     activeShopId = jar.get(SHOP_COOKIE)?.value ?? null;
     if (activeShopId) shopStatus = (await rawDb.shop.findUnique({ where: { id: activeShopId }, select: { status: true } }))?.status ?? null;
     if (activeShopId && !shopStatus) activeShopId = null;
+  } else if (claims.shopId && claims.shopId !== user.shopId) {
+    // switched to another location: must hold a membership there, role comes from it
+    const m = await rawDb.shopMember.findUnique({ where: { userId_shopId: { userId: user.id, shopId: claims.shopId } }, include: { shop: { select: { status: true } } } });
+    if (m) {
+      activeShopId = m.shopId;
+      shopStatus = m.shop.status;
+      role = m.role;
+    }
   }
-  return { id: user.id, email: user.email, name: user.name, role: user.role, shopId: user.shopId, activeShopId, shopStatus, customerId: user.customerId, technicianId: user.technician?.id ?? null };
+  return { id: user.id, email: user.email, name: user.name, role, shopId: user.shopId, activeShopId, shopStatus, customerId: user.customerId, technicianId: user.technician?.id ?? null };
 });
 
 /** Staff of the active shop. Super-admins pass when they have a shop open. */

@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { requireStaff } from "@/lib/auth";
+import { requireStaff, userLocations } from "@/lib/auth";
 import { MODULES } from "@/lib/constants";
 import { getSettings } from "@/lib/settings";
 import { db } from "@/lib/db";
@@ -19,6 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const shop = user.activeShopId ? await rawDb.shop.findUnique({ where: { id: user.activeShopId }, select: { status: true, trialEndsAt: true } }) : null;
   const trialDays = shop?.status === "TRIAL" && shop.trialEndsAt ? differenceInCalendarDays(shop.trialEndsAt, new Date()) : null;
   const canBill = user.role === "OWNER" || user.role === "SUPERADMIN";
+  const locations = user.role === "SUPERADMIN" ? [] : await userLocations(user.id);
 
   // A module the shop turned off in Settings is hidden from the sidebar AND blocked by URL.
   const pathname = (await headers()).get("x-pathname") ?? "";
@@ -26,7 +27,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (hit && !settings.modules.includes(hit.key)) redirect("/dashboard?denied=1");
 
   return (
-    <AppShell nav={nav} user={{ name: user.name, role: user.role }} shopName={settings.name} logoUrl={settings.logoUrl} unread={unread}>
+    <AppShell nav={nav} user={{ name: user.name, role: user.role }} shopName={settings.name} logoUrl={settings.logoUrl} unread={unread} locations={locations} activeShopId={user.activeShopId ?? ""}>
       {user.role === "SUPERADMIN" ? (
         <div className="mb-4 rounded-lg border border-violet-500/40 bg-violet-500/10 px-4 py-2 text-sm text-violet-200 flex flex-wrap items-center gap-3">
           <span>Viewing <strong>{settings.name}</strong> as NexDrive platform admin.</span>

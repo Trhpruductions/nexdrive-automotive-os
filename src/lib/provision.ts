@@ -27,9 +27,13 @@ export async function provisionShop(opts: {
   plan?: ShopPlan;
   trialDays?: number;
   slug?: string;
+  /** add this shop as another location of the user who already has this email (no new login) */
+  asAdditionalLocation?: boolean;
 }) {
   const email = opts.ownerEmail.trim().toLowerCase();
-  if (await rawDb.user.findUnique({ where: { email } })) throw new Error("That email already has a NexDrive login.");
+  const existing = await rawDb.user.findUnique({ where: { email } });
+  if (existing && !opts.asAdditionalLocation) throw new Error("That email already has a NexDrive login.");
+  if (!existing && opts.asAdditionalLocation) throw new Error("No NexDrive login exists for that email yet.");
   const slug = await uniqueSlug(opts.slug ?? slugify(opts.name));
   const plan = opts.plan ?? "TRIAL";
   const shop = await rawDb.shop.create({
@@ -46,7 +50,9 @@ export async function provisionShop(opts: {
       cannedServices: { create: DEFAULT_CANNED_SERVICES },
     },
   });
-  const user = await rawDb.user.create({ data: { shopId: shop.id, email, name: opts.ownerName.trim(), role: "OWNER", passwordHash: await hashPassword(opts.password) } });
+  const user = existing
+    ? (await rawDb.shopMember.create({ data: { userId: existing.id, shopId: shop.id, role: "OWNER" } }), existing)
+    : await rawDb.user.create({ data: { shopId: shop.id, email, name: opts.ownerName.trim(), role: "OWNER", passwordHash: await hashPassword(opts.password) } });
   await rawDb.auditLog.create({ data: { shopId: shop.id, userId: user.id, action: "provision", entity: "Shop", entityId: shop.id, detail: `${shop.name} (${plan})` } });
   return { shop, user };
 }

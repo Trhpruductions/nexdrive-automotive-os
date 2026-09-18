@@ -281,7 +281,7 @@ export async function sendForApproval(id: string) {
   if (!wo.lines.length) redirect(`/work-orders/${id}?error=Add+at+least+one+line+before+sending`);
   const token = wo.approvalToken ?? randomBytes(18).toString("base64url");
   const link = `${process.env.APP_URL ?? ""}/approve/${token}`;
-  await db.workOrder.update({ where: { id }, data: { status: "AWAITING_APPROVAL", approvalToken: token, sentForApprovalAt: new Date(), approvedAt: null, approvedBy: null, declinedAt: null } });
+  await db.workOrder.update({ where: { id }, data: { status: "AWAITING_APPROVAL", approvalToken: token, sentForApprovalAt: new Date(), followUpSentAt: null, approvedAt: null, approvedBy: null, declinedAt: null } });
   const settings = await getSettings();
   const totals = computeTotals(wo.lines, settings.taxRate, { taxExempt: wo.customer.taxExempt });
   const t = await renderTemplate("estimate_ready", { customer: wo.customer.firstName, vehicle: `${wo.vehicle.year} ${wo.vehicle.make} ${wo.vehicle.model}`, total: totals.total.toLocaleString("en-US", { style: "currency", currency: "USD" }), link });

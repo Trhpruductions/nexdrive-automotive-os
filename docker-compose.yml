@@ -44,6 +44,7 @@ services:
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
       TWILIO_FROM: ${TWILIO_FROM:-}
+      TZ: ${TZ:-America/New_York}
     volumes:
       - uploads:/app/var/uploads
     expose:

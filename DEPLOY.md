@@ -62,6 +62,7 @@ Copy `.next/static` to `.next/standalone/.next/static` and `public` to `.next/st
 | `DATABASE_URL` | yes | PostgreSQL connection string |
 | `AUTH_SECRET` | yes | signs sessions (32+ random chars); rotating it signs everyone out |
 | `APP_URL` | yes | public base URL used in customer approval links / notifications |
+| `TZ` | yes (hosted) | server time zone, e.g. `America/Denver` — schedules, "today" and reminders are computed in it; set it to the shop's zone (single-region installs) |
 | `ANTHROPIC_API_KEY` | no | enables NexDrive AI |
 | `RESEND_API_KEY`, `EMAIL_FROM` | no | email delivery via Resend — notifications and password-reset links (otherwise emails stay queued and reset links are printed to the server log) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE` | no | email delivery via plain SMTP instead of Resend |

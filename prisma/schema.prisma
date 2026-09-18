@@ -49,6 +49,7 @@ model Shop {
 
   settings       ShopSettings?
   users          User[]
+  members        ShopMember[]
   technicians    Technician[]
   bays           Bay[]
   customers      Customer[]
@@ -113,10 +114,29 @@ model User {
   auditLogs  AuditLog[]
   aiMessages AiMessage[]
   passwordResets PasswordResetToken[]
+  memberships    ShopMember[]
 
   shop   Shop?   @relation(fields: [shopId], references: [id], onDelete: Cascade)
   shopId String?
 
+  @@index([shopId])
+}
+
+/**
+ * Extra shops a user can work in (multi-location owners, roaming advisors).
+ * `User.shopId` stays the home shop; the session's active shop is one of these.
+ */
+model ShopMember {
+  id        String   @id @default(cuid())
+  role      Role     @default(OWNER)
+  createdAt DateTime @default(now())
+
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  shop   Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId String
+
+  @@unique([userId, shopId])
   @@index([shopId])
 }
 
@@ -341,6 +361,7 @@ model WorkOrder {
   promisedAt        DateTime?
   approvalToken     String?         @unique
   sentForApprovalAt DateTime?
+  followUpSentAt    DateTime?
   approvedAt        DateTime?
   approvedBy        String?
   declinedAt        DateTime?

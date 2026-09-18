@@ -31,6 +31,36 @@ export async function sendAppointmentReminders(onlyShopId?: string) {
   return n;
 }
 
+/**
+ * One gentle nudge for estimates the customer hasn't answered in 2 days
+ * (sent once per estimate; a new "send for approval" resets it).
+ */
+export async function sendEstimateFollowUps(onlyShopId?: string) {
+  const cutoff = subDays(new Date(), 2);
+  const rows = await rawDb.workOrder.findMany({
+    where: { status: "AWAITING_APPROVAL", approvalToken: { not: null }, sentForApprovalAt: { lt: cutoff }, followUpSentAt: null, ...(onlyShopId ? { shopId: onlyShopId } : {}), shop: { status: { in: ["ACTIVE", "TRIAL"] } } },
+    include: { vehicle: { select: { year: true, make: true, model: true } }, customer: { select: { firstName: true, taxExempt: true } }, lines: true },
+    take: 200,
+  });
+  if (!rows.length) return 0;
+  const { computeTotals } = await import("./money");
+  const { getSettings } = await import("./settings");
+  const { publicBase } = await import("./templates");
+  const base = await publicBase();
+  let n = 0;
+  for (const wo of rows) {
+    await withShop(wo.shopId, async () => {
+      const s = await getSettings();
+      const total = computeTotals(wo.lines, s.taxRate, { taxExempt: wo.customer.taxExempt }).total;
+      const t = await renderTemplate("estimate_followup", { customer: wo.customer.firstName, vehicle: `${wo.vehicle.year} ${wo.vehicle.make} ${wo.vehicle.model}`, total: total.toLocaleString("en-US", { style: "currency", currency: "USD" }), link: `${base}/approve/${wo.approvalToken}` });
+      await queueNotification({ customerId: wo.customerId, workOrderId: wo.id, ...t });
+    });
+    await rawDb.workOrder.update({ where: { id: wo.id }, data: { followUpSentAt: new Date() } });
+    n++;
+  }
+  return n;
+}
+
 /** Numbers for one shop's day: collected, invoiced, completed, tomorrow's schedule, open estimates. */
 export async function dayDigest(shopId: string, day = new Date()) {
   const start = startOfDay(day);

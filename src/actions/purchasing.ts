@@ -5,6 +5,9 @@ import { revalidatePath } from "next/cache";
 import { db, currentShopId, nextNumber } from "@/lib/db";
 import { requireStaff, BILLING_ROLES } from "@/lib/auth";
 import { emitWebhook } from "@/lib/webhooks";
+import { mailConfigured, sendEmail } from "@/lib/mail";
+import { getSettings, shopAddress } from "@/lib/settings";
+import { renderEmailHtml } from "@/lib/email-html";
 
 const opt = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
 
@@ -32,10 +35,30 @@ export async function createPurchaseOrder(formData: FormData) {
 }
 
 export async function markPurchaseOrderSent(id: string) {
-  await requireStaff(BILLING_ROLES);
-  await db.purchaseOrder.update({ where: { id }, data: { status: "SENT", sentAt: new Date() } });
+  const user = await requireStaff(BILLING_ROLES);
+  const po = await db.purchaseOrder.update({ where: { id }, data: { status: "SENT", sentAt: new Date() }, include: { supplier: true, lines: { include: { part: { select: { sku: true } } } } } });
+  // email the order sheet to the supplier when we can
+  let emailed = false;
+  if (po.supplier.email && mailConfigured()) {
+    const s = await getSettings();
+    const num = `PO-${String(po.number).padStart(5, "0")}`;
+    const total = po.lines.reduce((sum, l) => sum + l.quantity * Number(l.unitCost), 0);
+    const body = [
+      `Purchase order ${num} from ${s.name}`,
+      "",
+      ...po.lines.map((l) => `${l.quantity} x ${l.description}${l.part?.sku ? ` (${l.part.sku})` : ""} @ $${Number(l.unitCost).toFixed(2)}`),
+      "",
+      `Order total: $${total.toFixed(2)}`,
+      po.expectedAt ? `Requested delivery: ${po.expectedAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : null,
+      po.notes ? `Notes: ${po.notes}` : null,
+      "",
+      `Ship to: ${s.name}, ${shopAddress(s).join(", ")}`,
+      `Questions: ${[s.phone, s.email].filter(Boolean).join(" / ")} — ordered by ${user.name}`,
+    ].filter((l): l is string => l !== null).join("\n");
+    emailed = await sendEmail({ to: po.supplier.email, subject: `${num} — purchase order from ${s.name}`, text: body, html: renderEmailHtml({ shopName: s.name, accent: s.accentColor, address: shopAddress(s).join(", "), phone: s.phone, subject: `Purchase order ${num}`, body }) });
+  }
   revalidatePath(`/parts/orders/${id}`);
-  redirect(`/parts/orders/${id}?ok=Marked+as+sent+to+supplier`);
+  redirect(`/parts/orders/${id}?ok=${emailed ? "Order+emailed+to+supplier" : "Marked+as+sent+to+supplier"}`);
 }
 
 export async function cancelPurchaseOrder(id: string) {

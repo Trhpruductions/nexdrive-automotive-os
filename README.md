@@ -27,6 +27,8 @@ New shops self-serve at `/signup` (14-day trial, every module enabled).
 
 ## Multi-shop (SaaS)
 
+**Multiple locations.** An owner can run several shops under one login: the admin console adds a location for an existing owner (or grants an existing staff login access to a shop with a role), and a location switcher appears in the header. Each location keeps its own customers, data, settings, branding and numbering — the session simply carries which one is active, and the isolation layer scopes everything to it.
+
 **Plans & billing.** Every new shop starts a 14-day trial; a banner counts down the last week and the hourly scheduler suspends expired trials (data is kept). Owners manage their plan at `/billing`. With NexDrive's own Stripe keys in the environment (`STRIPE_PLATFORM_SECRET_KEY`, `STRIPE_PLATFORM_WEBHOOK_SECRET`, `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PRO`) that page sells Starter/Pro through Stripe Checkout and the webhook at `/api/stripe/platform` keeps the shop's plan, status and renewal date in step (failed payment → "past due" banner; cancelled → suspended until the owner re-subscribes). Without those keys, plans are set by hand in the admin console.
 
 
@@ -104,6 +106,8 @@ Around that core:
 - **Branded email** — every customer email goes out as HTML with the shop's logo, accent colour and a button for the link (approval, pay link, dashboard), with plain text alongside.
 - **Two-way SMS** — point the Twilio number's inbound webhook at `/api/twilio/inbound` (signature-checked) and customer texts land in Messages, matched by phone; unknown numbers get their own thread; STOP is noted on the customer.
 - **Owner's daily digest** — an end-of-day email (collected, invoiced, completed, estimates going stale, parts to reorder, tomorrow's schedule), on by default under Settings → Business.
+- **Estimate follow-ups** — an estimate the customer hasn't answered in two days gets one "still thinking it over?" nudge with the approval link (`estimate_followup` template); re-sending the estimate resets it.
+- **Purchase orders by email** — *Mark as sent* emails the order sheet to the supplier when they have an email address and a mail provider is configured.
 
 ## Production lines & inventory feeds
 

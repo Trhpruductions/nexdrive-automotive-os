@@ -7,6 +7,7 @@ import { rawDb } from "@/lib/db";
 import { Badge, Card, Field, Flash, PageHeader, Stat } from "@/components/ui";
 import { ConfirmButton } from "@/components/app/confirm-button";
 import { adminDeleteShop, adminExtendTrial, adminOpenShop, adminResetOwnerPassword, adminUpdateShop } from "@/actions/platform";
+import { adminAddLocation, adminGrantAccess, adminRevokeAccess } from "@/actions/locations";
 import { ROLE_LABEL } from "@/lib/constants";
 import { fmtDate, fmtDateTime, fmtRelative, money, toDateInput } from "@/lib/format";
 
@@ -19,6 +20,7 @@ export default async function AdminShopPage({ params, searchParams }: { params: 
     include: {
       settings: true,
       users: { where: { role: { not: "CUSTOMER" } }, orderBy: { createdAt: "asc" } },
+      members: { include: { user: { select: { id: true, name: true, email: true, shop: { select: { name: true } } } } }, orderBy: { createdAt: "asc" } },
       _count: { select: { customers: true, vehicles: true, workOrders: true, invoices: true, apiKeys: true, integrations: true, machines: true } },
     },
   });
@@ -83,6 +85,30 @@ export default async function AdminShopPage({ params, searchParams }: { params: 
               </div>
             </form>
             <p className="text-xs text-faint mt-3">Suspended and cancelled shops cannot sign in and their API keys stop working; their data is kept.</p>
+          </Card>
+          <Card title="Locations & shared access">
+            <p className="text-xs text-muted mb-3">Multi-location owners switch shops from the header. Memberships let an existing login work here with a role; the shop the user signed up with stays their home shop.</p>
+            {shop.members.length ? (
+              <ul className="divide-y divide-border mb-4">
+                {shop.members.map((m) => (
+                  <li key={m.id} className="py-2 text-sm flex items-center justify-between gap-2">
+                    <span><span className="font-medium">{m.user.name}</span><span className="text-xs text-muted block">{m.user.email} · home: {m.user.shop?.name ?? "—"}</span></span>
+                    <span className="flex items-center gap-2"><Badge tone="slate">{ROLE_LABEL[m.role]}</Badge><form action={adminRevokeAccess.bind(null, shop.id, m.user.id)}><button className="btn btn-ghost btn-sm text-red-400">Remove</button></form></span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <form action={adminGrantAccess.bind(null, shop.id)} className="flex flex-col sm:flex-row gap-2 mb-4">
+              <input name="email" type="email" required placeholder="existing staff login email" className="input" />
+              <select name="role" className="select sm:w-44" defaultValue="OWNER">{["OWNER", "ADMIN", "SERVICE_ADVISOR", "TECHNICIAN"].map((r) => <option key={r} value={r}>{ROLE_LABEL[r as keyof typeof ROLE_LABEL]}</option>)}</select>
+              <button className="btn btn-secondary shrink-0">Grant access</button>
+            </form>
+            <form action={adminAddLocation.bind(null, shop.id)} className="flex flex-col sm:flex-row gap-2 pt-4 border-t border-border">
+              <input name="name" required placeholder="New location name" className="input" />
+              <input name="ownerEmail" type="email" required defaultValue={shop.ownerEmail ?? ""} placeholder="owner's login email" className="input" />
+              <button className="btn btn-primary shrink-0">Add location</button>
+            </form>
+            <p className="text-[11px] text-faint mt-2">New locations are created on the Enterprise plan with the same owner login; billing for extra locations is handled by hand.</p>
           </Card>
           <Card title="Owner password reset">
             <form action={adminResetOwnerPassword.bind(null, shop.id)} className="flex gap-2">

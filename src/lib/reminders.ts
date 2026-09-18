@@ -2,7 +2,7 @@ import "server-only";
 import { addDays } from "date-fns";
 import { rawDb, withShop } from "./db";
 import { queueNotification } from "./notify";
-import { renderTemplate } from "./templates";
+import { publicBase, renderTemplate } from "./templates";
 
 const LOOKAHEAD_DAYS = 14;
 const LOOKAHEAD_MILES = 500;
@@ -13,8 +13,9 @@ const LOOKAHEAD_MILES = 500;
  * Returns the number of reminders sent.
  */
 export async function sendDueReminders(onlyShopId?: string) {
-  const shops = await rawDb.shop.findMany({ where: { status: { in: ["ACTIVE", "TRIAL"] }, ...(onlyShopId ? { id: onlyShopId } : {}) }, select: { id: true } });
+  const shops = await rawDb.shop.findMany({ where: { status: { in: ["ACTIVE", "TRIAL"] }, ...(onlyShopId ? { id: onlyShopId } : {}) }, select: { id: true, slug: true } });
   let sent = 0;
+  const base = await publicBase();
   for (const shop of shops) {
     sent += await withShop(shop.id, async () => {
       const rows = await rawDb.maintenanceReminder.findMany({
@@ -32,7 +33,7 @@ export async function sendDueReminders(onlyShopId?: string) {
         const byMiles = r.dueAtMileage != null ? r.vehicle.mileage >= r.dueAtMileage - LOOKAHEAD_MILES : false;
         if (!byDate && !byMiles) continue;
         const when = r.dueAtDate ? r.dueAtDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : r.dueAtMileage != null ? `${r.dueAtMileage.toLocaleString()} mi` : "soon";
-        const t = await renderTemplate("reminder_due", { customer: r.vehicle.customer.firstName, vehicle: `${r.vehicle.year} ${r.vehicle.make} ${r.vehicle.model}`, service: r.service, date: when });
+        const t = await renderTemplate("reminder_due", { customer: r.vehicle.customer.firstName, vehicle: `${r.vehicle.year} ${r.vehicle.make} ${r.vehicle.model}`, service: r.service, date: when, link: `${base}/book/${shop.slug}` });
         await queueNotification({ customerId: r.vehicle.customerId, ...t });
         await rawDb.maintenanceReminder.update({ where: { id: r.id }, data: { notifiedAt: new Date() } });
         n++;
@@ -49,7 +50,8 @@ export function startReminderScheduler() {
   if (timer) return;
   const run = async () => {
     await sendDueReminders().catch((e) => console.error("[nexdrive] reminder run failed", e));
-    const { sendAppointmentReminders, sendDailyDigests } = await import("./digest");
+    const { sendAppointmentReminders, sendDailyDigests, sendEstimateFollowUps } = await import("./digest");
+    await sendEstimateFollowUps().then((n) => n && console.log(`[nexdrive] ${n} estimate follow-up(s) sent`)).catch((e) => console.error("[nexdrive] estimate follow-ups failed", e));
     await sendAppointmentReminders().then((n) => n && console.log(`[nexdrive] ${n} appointment reminder(s) sent`)).catch((e) => console.error("[nexdrive] appointment reminders failed", e));
     await sendDailyDigests().then((n) => n && console.log(`[nexdrive] ${n} daily digest(s) sent`)).catch((e) => console.error("[nexdrive] daily digest failed", e));
     const { flushOutbox } = await import("./notify");

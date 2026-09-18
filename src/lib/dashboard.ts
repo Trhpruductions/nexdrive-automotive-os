@@ -1,12 +1,13 @@
 import "server-only";
 import { addDays, differenceInMinutes, eachDayOfInterval, endOfDay, format, startOfDay, subDays } from "date-fns";
-import { db } from "./db";
+import { db, currentShopId } from "./db";
 
 export type Range = "daily" | "weekly" | "monthly";
 
 const RANGE_DAYS: Record<Range, number> = { daily: 7, weekly: 28, monthly: 30 };
 
 export async function getDashboard(range: Range = "monthly") {
+  const shopId = await currentShopId();
   const now = new Date();
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
@@ -53,9 +54,10 @@ export async function getDashboard(range: Range = "monthly") {
     }),
     db.technician.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
     db.timeEntry.findMany({ where: { startedAt: { gte: todayStart } } }),
+    // raw SQL bypasses the shop-scoped client — filter by shop explicitly
     db.$queryRaw<{ id: string; name: string; sku: string; quantityOnHand: number; reorderPoint: number; category: string | null }[]>`
       SELECT id, name, sku, "quantityOnHand", "reorderPoint", category FROM "Part"
-      WHERE active AND "quantityOnHand" <= "reorderPoint" ORDER BY ("quantityOnHand"::float / NULLIF("reorderPoint",0)) ASC NULLS FIRST LIMIT 6`,
+      WHERE "shopId" = ${shopId} AND active AND "quantityOnHand" <= "reorderPoint" ORDER BY ("quantityOnHand"::float / NULLIF("reorderPoint",0)) ASC NULLS FIRST LIMIT 6`,
     db.appointment.findMany({
       where: { scheduledStart: { gte: todayStart, lte: todayEnd }, status: { notIn: ["CANCELLED", "NO_SHOW"] } },
       include: { vehicle: true, customer: true, bay: true, technician: true },
